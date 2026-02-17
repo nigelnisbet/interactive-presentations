@@ -1,0 +1,41 @@
+{
+  "presentationId": "",
+  "title": "My Interactive Presentation",
+  "description": "Test presentation with interactive activities",
+  "activities": [
+    {
+      "slidePosition": { "indexh": 1, "indexv": 0 },
+      "activityType": "poll",
+      "activityId": "poll-test-1",
+      "config": {
+        "type": "poll",
+        "question": "Is this system working?",
+        "options": [
+          "Yes, it's amazing!",
+          "Not yet",
+          "Having issues"
+        ],
+        "allowMultiple": false,
+        "showResults": "live"
+      }
+    },
+    {
+      "slidePosition": { "indexh": 2, "indexv": 0 },
+      "activityType": "quiz",
+      "activityId": "quiz-test-1",
+      "config": {
+        "type": "quiz",
+        "question": "What is 2 + 2?",
+        "options": [
+          "3",
+          "4",
+          "5",
+          "22"
+        ],
+        "correctAnswer": 1,
+        "timeLimit": 30,
+        "points": 100
+      }
+    }
+  ]
+}

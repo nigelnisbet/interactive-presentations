@@ -1,0 +1,54 @@
+{
+  "presentationId": "demo",
+  "title": "Demo Presentation",
+  "description": "Simple demo: blank, poll, ST Math, quiz, blank",
+  "activities": [
+    {
+      "slidePosition": { "indexh": 1, "indexv": 0 },
+      "activityType": "poll",
+      "activityId": "demo-poll",
+      "config": {
+        "type": "poll",
+        "question": "How are you feeling today?",
+        "options": [
+          "Great! 😊",
+          "Pretty good",
+          "Okay",
+          "Could be better"
+        ],
+        "allowMultiple": false,
+        "showResults": "live"
+      }
+    },
+    {
+      "slidePosition": { "indexh": 2, "indexv": 0 },
+      "activityType": "web-link",
+      "activityId": "stmath-game",
+      "config": {
+        "type": "web-link",
+        "title": "ST Math - Pattern Machine",
+        "description": "Complete the pattern puzzles! Try to solve at least 3.",
+        "url": "https://play.stmath.com/demo.html#/play/PatternMachine/PatternMachine5Puzzles",
+        "displayMode": "new-tab"
+      }
+    },
+    {
+      "slidePosition": { "indexh": 3, "indexv": 0 },
+      "activityType": "quiz",
+      "activityId": "demo-quiz",
+      "config": {
+        "type": "quiz",
+        "question": "What is the capital of France?",
+        "options": [
+          "London",
+          "Paris",
+          "Berlin",
+          "Madrid"
+        ],
+        "correctAnswer": 1,
+        "timeLimit": 20,
+        "points": 100
+      }
+    }
+  ]
+}

@@ -1,0 +1,66 @@
+{
+  "presentationId": "example-with-stmath",
+  "title": "Example with ST Math Integration",
+  "description": "Demonstration of web-link activities including ST Math games",
+  "activities": [
+    {
+      "slidePosition": { "indexh": 1, "indexv": 0 },
+      "activityType": "poll",
+      "activityId": "warm-up-poll",
+      "config": {
+        "type": "poll",
+        "question": "How excited are you to try ST Math?",
+        "options": [
+          "Very excited! 🎉",
+          "Pretty excited",
+          "Curious to see"
+        ],
+        "allowMultiple": false,
+        "showResults": "live"
+      }
+    },
+    {
+      "slidePosition": { "indexh": 2, "indexv": 0 },
+      "activityType": "web-link",
+      "activityId": "stmath-pattern-machine",
+      "config": {
+        "type": "web-link",
+        "title": "ST Math - Pattern Machine",
+        "description": "Play the Pattern Machine puzzle game. Try to complete as many puzzles as you can!",
+        "url": "https://play.stmath.com/demo.html#/play/PatternMachine/PatternMachine5Puzzles",
+        "displayMode": "iframe",
+        "iframeHeight": "80vh"
+      }
+    },
+    {
+      "slidePosition": { "indexh": 3, "indexv": 0 },
+      "activityType": "web-link",
+      "activityId": "stmath-new-tab",
+      "config": {
+        "type": "web-link",
+        "title": "ST Math - Full Screen Experience",
+        "description": "Opens ST Math in a new tab for a full-screen gaming experience",
+        "url": "https://play.stmath.com/demo.html#/play/PatternMachine/PatternMachine5Puzzles",
+        "displayMode": "new-tab"
+      }
+    },
+    {
+      "slidePosition": { "indexh": 4, "indexv": 0 },
+      "activityType": "quiz",
+      "activityId": "comprehension-check",
+      "config": {
+        "type": "quiz",
+        "question": "What skill does Pattern Machine help develop?",
+        "options": [
+          "Pattern recognition",
+          "Math calculation",
+          "Reading comprehension",
+          "Physical coordination"
+        ],
+        "correctAnswer": 0,
+        "timeLimit": 20,
+        "points": 100
+      }
+    }
+  ]
+}

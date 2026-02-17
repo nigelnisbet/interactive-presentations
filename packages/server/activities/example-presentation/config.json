@@ -1,0 +1,79 @@
+{
+  "presentationId": "example-presentation",
+  "title": "Example Interactive Presentation",
+  "description": "A sample presentation showing different activity types",
+  "activities": [
+    {
+      "slidePosition": { "indexh": 2, "indexv": 0 },
+      "activityType": "poll",
+      "activityId": "poll-favorite-color",
+      "config": {
+        "type": "poll",
+        "question": "What's your favorite color?",
+        "options": [
+          "Red",
+          "Blue",
+          "Green",
+          "Yellow"
+        ],
+        "allowMultiple": false,
+        "showResults": "live"
+      }
+    },
+    {
+      "slidePosition": { "indexh": 4, "indexv": 0 },
+      "activityType": "poll",
+      "activityId": "poll-programming-languages",
+      "config": {
+        "type": "poll",
+        "question": "Which programming languages do you know?",
+        "options": [
+          "JavaScript",
+          "Python",
+          "Java",
+          "C++",
+          "Go",
+          "Rust"
+        ],
+        "allowMultiple": true,
+        "showResults": "live"
+      }
+    },
+    {
+      "slidePosition": { "indexh": 6, "indexv": 0 },
+      "activityType": "quiz",
+      "activityId": "quiz-capital-france",
+      "config": {
+        "type": "quiz",
+        "question": "What is the capital of France?",
+        "options": [
+          "London",
+          "Paris",
+          "Berlin",
+          "Madrid"
+        ],
+        "correctAnswer": 1,
+        "timeLimit": 30,
+        "points": 100
+      }
+    },
+    {
+      "slidePosition": { "indexh": 8, "indexv": 0 },
+      "activityType": "quiz",
+      "activityId": "quiz-javascript",
+      "config": {
+        "type": "quiz",
+        "question": "What does 'typeof null' return in JavaScript?",
+        "options": [
+          "\"null\"",
+          "\"object\"",
+          "\"undefined\"",
+          "\"number\""
+        ],
+        "correctAnswer": 1,
+        "timeLimit": 20,
+        "points": 150
+      }
+    }
+  ]
+}
