@@ -1,6 +1,15 @@
 /**
  * Script to upload activity configurations to Firebase Realtime Database
  * Run with: node scripts/upload-activities.mjs
+ *
+ * Requires environment variables (create a .env file in project root):
+ *   FIREBASE_API_KEY
+ *   FIREBASE_AUTH_DOMAIN
+ *   FIREBASE_DATABASE_URL
+ *   FIREBASE_PROJECT_ID
+ *   FIREBASE_STORAGE_BUCKET
+ *   FIREBASE_MESSAGING_SENDER_ID
+ *   FIREBASE_APP_ID
  */
 
 import { initializeApp } from 'firebase/app';
@@ -8,20 +17,34 @@ import { getDatabase, ref, set } from 'firebase/database';
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import { config } from 'dotenv';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-// Firebase configuration
+// Load environment variables from project root
+config({ path: path.join(__dirname, '../.env') });
+
+// Firebase configuration from environment
 const firebaseConfig = {
-  apiKey: "AIzaSyALHOftrFMc8iELsW5BRzT6fUz_qofRSuw",
-  authDomain: "class-session-games.firebaseapp.com",
-  databaseURL: "https://class-session-games-default-rtdb.firebaseio.com",
-  projectId: "class-session-games",
-  storageBucket: "class-session-games.firebasestorage.app",
-  messagingSenderId: "528175934275",
-  appId: "1:528175934275:web:1c10fb554988405f639df6"
+  apiKey: process.env.FIREBASE_API_KEY,
+  authDomain: process.env.FIREBASE_AUTH_DOMAIN,
+  databaseURL: process.env.FIREBASE_DATABASE_URL,
+  projectId: process.env.FIREBASE_PROJECT_ID,
+  storageBucket: process.env.FIREBASE_STORAGE_BUCKET,
+  messagingSenderId: process.env.FIREBASE_MESSAGING_SENDER_ID,
+  appId: process.env.FIREBASE_APP_ID
 };
+
+// Validate config
+if (!firebaseConfig.apiKey || !firebaseConfig.databaseURL) {
+  console.error('Error: Missing Firebase configuration.');
+  console.error('Create a .env file in the project root with:');
+  console.error('  FIREBASE_API_KEY=your-api-key');
+  console.error('  FIREBASE_DATABASE_URL=your-database-url');
+  console.error('  ... etc');
+  process.exit(1);
+}
 
 // Initialize Firebase
 const app = initializeApp(firebaseConfig);
