@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { PollActivity, PollResults } from '@interactive-presentations/shared';
-import { useSocket } from '../../contexts/SocketContext';
+import { useSocket } from '../../contexts/FirebaseContext';
 
 interface PollProps {
   activity: PollActivity;

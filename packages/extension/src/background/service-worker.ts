@@ -1,17 +1,57 @@
-import { io, Socket } from 'socket.io-client';
-import { PresenterEvents } from '@interactive-presentations/shared';
+/**
+ * Background Service Worker for Interactive Presentations Extension
+ * Uses Firebase Realtime Database instead of Socket.IO
+ */
+
+import { initializeApp } from 'firebase/app';
+import {
+  getDatabase,
+  ref,
+  set,
+  get,
+  update,
+  onValue,
+  off,
+  Unsubscribe,
+} from 'firebase/database';
 
 console.log('[Interactive Presentations] Background service worker started');
 
-let socket: Socket | null = null;
-let currentSessionId: string | null = null;
+// Firebase configuration - same project as trillionaire
+const firebaseConfig = {
+  apiKey: "AIzaSyALHOftrFMc8iELsW5BRzT6fUz_qofRSuw",
+  authDomain: "class-session-games.firebaseapp.com",
+  databaseURL: "https://class-session-games-default-rtdb.firebaseio.com",
+  projectId: "class-session-games",
+  storageBucket: "class-session-games.firebasestorage.app",
+  messagingSenderId: "528175934275",
+  appId: "1:528175934275:web:1c10fb554988405f639df6"
+};
+
+// Initialize Firebase
+const app = initializeApp(firebaseConfig);
+const database = getDatabase(app);
+
+// Session state
 let currentSessionCode: string | null = null;
+let currentSessionId: string | null = null;
 let currentQRCode: string | null = null;
+let currentPresentationId: string | null = null;
+let activities: any[] = [];
 let participantCount = 0;
+let unsubscribeParticipants: Unsubscribe | null = null;
 
-const SERVER_URL = 'http://localhost:3000';
+// Generate 6-character session code (avoiding confusing characters)
+function generateSessionCode(): string {
+  const chars = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789';
+  let code = '';
+  for (let i = 0; i < 6; i++) {
+    code += chars.charAt(Math.floor(Math.random() * chars.length));
+  }
+  return code;
+}
 
-// Listen for messages from content script
+// Listen for messages from content script and popup
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   console.log('[Interactive Presentations] Message received:', message.type);
 
@@ -46,13 +86,26 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   }
 
   if (message.type === 'GET_SESSION_INFO') {
-    sendResponse({
-      sessionId: currentSessionId,
-      sessionCode: currentSessionCode,
-      qrCode: currentQRCode,
-      participantCount,
-      connected: socket?.connected || false,
+    // Check Firebase connection
+    const connectedRef = ref(database, '.info/connected');
+    get(connectedRef).then((snapshot) => {
+      sendResponse({
+        sessionId: currentSessionId,
+        sessionCode: currentSessionCode,
+        qrCode: currentQRCode,
+        participantCount,
+        connected: snapshot.val() === true,
+      });
+    }).catch(() => {
+      sendResponse({
+        sessionId: currentSessionId,
+        sessionCode: currentSessionCode,
+        qrCode: currentQRCode,
+        participantCount,
+        connected: false,
+      });
     });
+    return true; // Keep channel open for async response
   }
 
   return true;
@@ -138,110 +191,175 @@ async function injectRevealListener(tabId: number) {
 
 async function createSession(presentationId: string) {
   try {
-    // Disconnect existing socket if any
-    if (socket) {
-      socket.disconnect();
+    console.log('[Interactive Presentations] Creating session for:', presentationId);
+
+    // Generate unique session code
+    let code = generateSessionCode();
+    let attempts = 0;
+
+    // Make sure code is unique
+    while (attempts < 10) {
+      const existingSession = await get(ref(database, `sessions/${code}`));
+      if (!existingSession.exists()) break;
+      code = generateSessionCode();
+      attempts++;
     }
 
-    // Connect to server
-    socket = io(SERVER_URL, {
-      transports: ['websocket', 'polling'],
-    });
+    if (attempts >= 10) {
+      return { success: false, error: 'Failed to generate unique session code' };
+    }
 
-    return new Promise((resolve) => {
-      if (!socket) {
-        resolve({ success: false, error: 'Failed to create socket' });
-        return;
+    const sessionId = `session_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+    const extensionId = chrome.runtime.id;
+
+    // Load activities for this presentation from Firebase
+    const activitiesSnapshot = await get(ref(database, `presentations/${presentationId}/activities`));
+    activities = activitiesSnapshot.exists() ? activitiesSnapshot.val() : [];
+
+    // If no activities in Firebase, try loading from bundled config
+    if (activities.length === 0) {
+      console.log('[Interactive Presentations] No activities in Firebase, checking bundled config');
+      // Activities might be stored in a different structure
+      const configSnapshot = await get(ref(database, `presentations/${presentationId}/config`));
+      if (configSnapshot.exists()) {
+        const config = configSnapshot.val();
+        activities = config.activities || [];
       }
+    }
 
-      socket.on('connect', () => {
-        console.log('[Interactive Presentations] Connected to server');
+    console.log('[Interactive Presentations] Loaded activities:', activities.length);
 
-        // Send presenter connect event
-        socket!.emit(PresenterEvents.CONNECT, {
-          presentationId,
-          extensionVersion: '1.0.0',
-        });
-      });
-
-      socket.on(PresenterEvents.CONNECTED, (payload) => {
-        console.log('[Interactive Presentations] Session created:', payload);
-
-        currentSessionId = payload.sessionId;
-        currentSessionCode = payload.sessionCode;
-        currentQRCode = payload.qrCodeUrl;
-
-        resolve({
-          success: true,
-          sessionId: payload.sessionId,
-          sessionCode: payload.sessionCode,
-          qrCode: payload.qrCodeUrl,
-        });
-      });
-
-      socket.on(PresenterEvents.SESSION_STATS, (payload) => {
-        console.log('[Interactive Presentations] Session stats:', payload);
-        participantCount = payload.participantCount;
-
-        // Notify popup if open
-        chrome.runtime.sendMessage({
-          type: 'SESSION_STATS_UPDATE',
-          data: payload,
-        }).catch(() => {
-          // Popup might not be open, ignore error
-        });
-      });
-
-      socket.on('error', (error) => {
-        console.error('[Interactive Presentations] Socket error:', error);
-        resolve({ success: false, error: error.message || 'Unknown error' });
-      });
-
-      socket.on('disconnect', () => {
-        console.log('[Interactive Presentations] Disconnected from server');
-      });
-
-      // Timeout after 10 seconds
-      setTimeout(() => {
-        if (!currentSessionId) {
-          resolve({ success: false, error: 'Connection timeout' });
-        }
-      }, 10000);
+    // Create session in Firebase
+    await set(ref(database, `sessions/${code}`), {
+      id: sessionId,
+      presentationId,
+      presenterId: extensionId,
+      status: 'active',
+      createdAt: Date.now(),
+      expiresAt: Date.now() + (24 * 60 * 60 * 1000), // 24 hours
+      currentSlide: { indexh: 0, indexv: 0, timestamp: Date.now() },
+      currentActivity: null,
+      activities: activities // Store activities with session for attendee access
     });
+
+    currentSessionCode = code;
+    currentSessionId = sessionId;
+    currentPresentationId = presentationId;
+
+    // Generate QR code URL (using a public QR code API)
+    const attendeeAppUrl = 'https://presentations.stmath.com'; // Production URL
+    const joinUrl = `${attendeeAppUrl}/join/${code}`;
+    currentQRCode = `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(joinUrl)}`;
+
+    // Setup participant count listener
+    setupParticipantListener(code);
+
+    console.log('[Interactive Presentations] Session created:', { code, sessionId });
+
+    return {
+      success: true,
+      sessionId,
+      sessionCode: code,
+      qrCode: currentQRCode,
+    };
+
   } catch (error) {
     console.error('[Interactive Presentations] Error creating session:', error);
     return { success: false, error: (error as Error).message };
   }
 }
 
-function handleSlideChange(slideData: { indexh: number; indexv: number; timestamp: number }) {
-  if (!socket || !socket.connected || !currentSessionId) {
-    console.log('[Interactive Presentations] Not connected, ignoring slide change');
-    return;
+function setupParticipantListener(sessionCode: string) {
+  // Clean up previous listener
+  if (unsubscribeParticipants) {
+    unsubscribeParticipants();
   }
 
-  console.log('[Interactive Presentations] Sending slide change:', slideData);
+  const participantsRef = ref(database, `sessions/${sessionCode}/participants`);
+  unsubscribeParticipants = onValue(participantsRef, (snapshot) => {
+    const participants = snapshot.val();
+    participantCount = participants
+      ? Object.keys(participants).filter(id => participants[id]?.isActive).length
+      : 0;
 
-  socket.emit(PresenterEvents.SLIDE_CHANGE, {
-    indexh: slideData.indexh,
-    indexv: slideData.indexv,
-  });
+    console.log('[Interactive Presentations] Participant count updated:', participantCount);
 
-  socket.once(PresenterEvents.SLIDE_ACKNOWLEDGED, (payload) => {
-    console.log('[Interactive Presentations] Slide acknowledged:', payload);
+    // Notify popup if open
+    chrome.runtime.sendMessage({
+      type: 'SESSION_STATS_UPDATE',
+      data: { participantCount },
+    }).catch(() => {
+      // Popup might not be open, ignore error
+    });
   });
 }
 
-function endSession() {
-  if (socket && currentSessionId) {
-    socket.emit(PresenterEvents.END_SESSION);
-    socket.disconnect();
+async function handleSlideChange(slideData: { indexh: number; indexv: number; timestamp: number }) {
+  if (!currentSessionCode) {
+    console.log('[Interactive Presentations] No active session, ignoring slide change');
+    return;
   }
 
-  socket = null;
-  currentSessionId = null;
+  console.log('[Interactive Presentations] Handling slide change:', slideData);
+
+  try {
+    // Update current slide in Firebase
+    await update(ref(database, `sessions/${currentSessionCode}`), {
+      currentSlide: slideData
+    });
+
+    // Find activity at this slide position
+    const activity = activities.find((a: any) =>
+      a.slidePosition.indexh === slideData.indexh &&
+      a.slidePosition.indexv === slideData.indexv
+    );
+
+    if (activity) {
+      console.log('[Interactive Presentations] Activity found at slide:', activity);
+
+      // Set current activity (this triggers listeners in attendee apps)
+      await set(ref(database, `sessions/${currentSessionCode}/currentActivity`), {
+        ...activity.config,
+        activityId: activity.activityId
+      });
+    } else {
+      console.log('[Interactive Presentations] No activity at this slide');
+
+      // Clear current activity
+      await set(ref(database, `sessions/${currentSessionCode}/currentActivity`), null);
+    }
+
+  } catch (error) {
+    console.error('[Interactive Presentations] Error handling slide change:', error);
+  }
+}
+
+async function endSession() {
+  console.log('[Interactive Presentations] Ending session');
+
+  if (currentSessionCode) {
+    try {
+      // Update session status in Firebase
+      await update(ref(database, `sessions/${currentSessionCode}`), {
+        status: 'ended'
+      });
+    } catch (error) {
+      console.error('[Interactive Presentations] Error ending session:', error);
+    }
+  }
+
+  // Clean up listener
+  if (unsubscribeParticipants) {
+    unsubscribeParticipants();
+    unsubscribeParticipants = null;
+  }
+
+  // Reset state
   currentSessionCode = null;
+  currentSessionId = null;
   currentQRCode = null;
+  currentPresentationId = null;
+  activities = [];
   participantCount = 0;
 }
 

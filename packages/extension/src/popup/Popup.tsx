@@ -178,12 +178,19 @@ const Popup: React.FC = () => {
         </div>
       </div>
 
+      <button
+        style={styles.dashboardButton}
+        onClick={() => window.open(`https://presentations.stmath.com/presenter/${sessionInfo.sessionCode}`, '_blank')}
+      >
+        Open Presenter Dashboard
+      </button>
+
       <button style={styles.endButton} onClick={endSession}>
         End Session
       </button>
 
       <div style={styles.footer}>
-        <small>Attendees join at: localhost:5173</small>
+        <small>Attendees join at: presentations.stmath.com</small>
       </div>
     </div>
   );
@@ -241,6 +248,19 @@ const styles = {
     cursor: 'pointer',
     transition: 'background-color 0.2s',
   },
+  dashboardButton: {
+    width: '100%',
+    padding: '12px 24px',
+    backgroundColor: '#28a745',
+    color: 'white',
+    border: 'none',
+    borderRadius: '6px',
+    fontSize: '14px',
+    fontWeight: 600,
+    cursor: 'pointer',
+    marginTop: '16px',
+    transition: 'background-color 0.2s',
+  },
   endButton: {
     width: '100%',
     padding: '10px 24px',
@@ -251,7 +271,7 @@ const styles = {
     fontSize: '14px',
     fontWeight: 600,
     cursor: 'pointer',
-    marginTop: '16px',
+    marginTop: '8px',
   },
   sessionCode: {
     backgroundColor: 'white',

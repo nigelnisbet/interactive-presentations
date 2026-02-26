@@ -11,6 +11,7 @@ export type ActivityType = 'poll' | 'quiz' | 'stmath-game' | 'word-cloud' | 'web
 
 export interface ActivityDefinition {
   type: ActivityType;
+  activityId?: string;
 }
 
 export interface PollActivity extends ActivityDefinition {
@@ -69,6 +70,8 @@ export interface QuizResults {
   correctAnswer: number;
   correctCount: number;
   incorrectCount: number;
+  responses: number[]; // Count of responses for each option
+  totalResponses: number;
   averageTime?: number;
   leaderboard?: LeaderboardEntry[];
 }

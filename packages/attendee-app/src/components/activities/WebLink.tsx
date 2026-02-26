@@ -76,6 +76,23 @@ export const WebLink: React.FC<WebLinkProps> = ({ activity }) => {
 
   // Default: iframe mode
   const iframeHeight = activity.iframeHeight || '80vh';
+  const isFullScreen = (activity as any).fullScreen === true;
+
+  // Full-screen iframe mode (for ST Math games, etc.)
+  if (isFullScreen) {
+    return (
+      <div className="fixed inset-0 bg-black">
+        <iframe
+          src={activity.url}
+          title={activity.title}
+          className="w-full h-full border-0"
+          allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; fullscreen"
+          allowFullScreen
+          sandbox="allow-same-origin allow-scripts allow-popups allow-forms"
+        />
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-gray-100 flex flex-col">

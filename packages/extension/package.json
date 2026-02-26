@@ -7,9 +7,9 @@
   },
   "dependencies": {
     "@interactive-presentations/shared": "*",
+    "firebase": "^10.8.0",
     "react": "^18.2.0",
-    "react-dom": "^18.2.0",
-    "socket.io-client": "^4.6.1"
+    "react-dom": "^18.2.0"
   },
   "devDependencies": {
     "@types/chrome": "^0.0.260",

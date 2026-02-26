@@ -8,11 +8,11 @@ interface PollResultsProps {
 
 export const PollResults: React.FC<PollResultsProps> = ({ activity, results }) => {
   const totalVotes = results?.totalResponses || 0;
-  const responses = results?.responses || {};
+  const responses = results?.responses || [];
 
   // Calculate percentages
   const optionStats = activity.options.map((option, index) => {
-    const count = responses[index] || 0;
+    const count = (responses as number[])[index] || 0;
     const percentage = totalVotes > 0 ? (count / totalVotes) * 100 : 0;
     return { option, count, percentage };
   });

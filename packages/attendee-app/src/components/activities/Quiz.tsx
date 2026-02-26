@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { QuizActivity } from '@interactive-presentations/shared';
-import { useSocket } from '../../contexts/SocketContext';
+import { useSocket } from '../../contexts/FirebaseContext';
 
 interface QuizProps {
   activity: QuizActivity;

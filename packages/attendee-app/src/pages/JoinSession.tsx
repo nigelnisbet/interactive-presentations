@@ -1,6 +1,6 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { useSocket } from '../contexts/SocketContext';
+import { useSocket } from '../contexts/FirebaseContext';
 
 export const JoinSession: React.FC = () => {
   const { code } = useParams<{ code?: string }>();
@@ -10,6 +10,21 @@ export const JoinSession: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const navigate = useNavigate();
   const { joinSession } = useSocket();
+
+  // Auto-join if code is provided in URL
+  useEffect(() => {
+    if (code && code.trim()) {
+      setLoading(true);
+      joinSession(code.trim().toUpperCase(), undefined)
+        .then(() => {
+          navigate('/waiting');
+        })
+        .catch((err) => {
+          setError((err as Error).message);
+          setLoading(false);
+        });
+    }
+  }, [code, joinSession, navigate]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();

@@ -1,23 +1,18 @@
 import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { useSocket } from '../contexts/SocketContext';
+import { useSocket } from '../contexts/FirebaseContext';
 import { PollResults } from '../components/presenter/PollResults';
 import { QuizResults } from '../components/presenter/QuizResults';
 
 export const PresenterDashboard: React.FC = () => {
   const { code } = useParams<{ code: string }>();
   const navigate = useNavigate();
-  const { socket, joinSession, currentActivity, currentResults, error, participantCount, connected } = useSocket();
+  const { joinSession, currentActivity, currentResults, error, participantCount, connected } = useSocket();
   const [joining, setJoining] = useState(true);
 
   useEffect(() => {
     if (!code) {
       navigate('/join');
-      return;
-    }
-
-    // Wait for socket to be initialized before joining
-    if (!socket) {
       return;
     }
 
@@ -30,7 +25,7 @@ export const PresenterDashboard: React.FC = () => {
         console.error('Failed to join session:', err);
         setJoining(false);
       });
-  }, [code, socket, joinSession, navigate]);
+  }, [code, joinSession, navigate]);
 
   if (joining) {
     return (
@@ -105,32 +100,32 @@ export const PresenterDashboard: React.FC = () => {
                     {currentActivity.type}
                   </span>
                   <h2 className="text-2xl font-bold text-gray-800">
-                    {currentActivity.type === 'poll' && currentActivity.question}
-                    {currentActivity.type === 'quiz' && currentActivity.question}
-                    {currentActivity.type === 'web-link' && currentActivity.title}
+                    {currentActivity.type === 'poll' && (currentActivity as any).question}
+                    {currentActivity.type === 'quiz' && (currentActivity as any).question}
+                    {currentActivity.type === 'web-link' && (currentActivity as any).title}
                   </h2>
                 </div>
                 <div className="text-right">
                   <div className="text-sm text-gray-500">Activity ID</div>
-                  <div className="text-lg font-mono text-gray-800">{currentActivity.id}</div>
+                  <div className="text-lg font-mono text-gray-800">{currentActivity.activityId}</div>
                 </div>
               </div>
             </div>
 
             {/* Activity-Specific Results */}
             {currentActivity.type === 'poll' && (
-              <PollResults activity={currentActivity} results={currentResults} />
+              <PollResults activity={currentActivity as any} results={currentResults as any} />
             )}
             {currentActivity.type === 'quiz' && (
-              <QuizResults activity={currentActivity} results={currentResults} />
+              <QuizResults activity={currentActivity as any} results={currentResults as any} />
             )}
             {currentActivity.type === 'web-link' && (
               <div className="bg-white rounded-lg shadow-md p-8 text-center">
                 <div className="text-5xl mb-4">🔗</div>
                 <h3 className="text-xl font-bold text-gray-800 mb-2">External Activity</h3>
-                <p className="text-gray-600 mb-4">{currentActivity.description}</p>
+                <p className="text-gray-600 mb-4">{(currentActivity as any).description}</p>
                 <a
-                  href={currentActivity.url}
+                  href={(currentActivity as any).url}
                   target="_blank"
                   rel="noopener noreferrer"
                   className="inline-block bg-blue-600 text-white py-2 px-6 rounded-lg font-semibold hover:bg-blue-700"

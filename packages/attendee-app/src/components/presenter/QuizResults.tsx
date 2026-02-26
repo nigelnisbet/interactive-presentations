@@ -8,7 +8,9 @@ interface QuizResultsProps {
 
 export const QuizResults: React.FC<QuizResultsProps> = ({ activity, results }) => {
   const totalResponses = results?.totalResponses || 0;
-  const responses = results?.responses || {};
+  const responses = results?.responses || [];
+  const correctCount = results?.correctCount || 0;
+  const incorrectCount = results?.incorrectCount || 0;
   const correctAnswer = activity.correctAnswer;
 
   // Calculate stats for each option
@@ -19,8 +21,6 @@ export const QuizResults: React.FC<QuizResultsProps> = ({ activity, results }) =
     return { option, count, percentage, isCorrect };
   });
 
-  const correctCount = responses[correctAnswer] || 0;
-  const incorrectCount = totalResponses - correctCount;
   const accuracyRate = totalResponses > 0 ? (correctCount / totalResponses) * 100 : 0;
 
   return (

@@ -29,7 +29,8 @@
         "title": "ST Math: Pattern Machine",
         "description": "Complete the pattern puzzles!",
         "url": "https://play.stmath.com/demo.html#/play/PatternMachine/PatternMachine5Puzzles",
-        "displayMode": "new-tab"
+        "displayMode": "iframe",
+        "fullScreen": true
       }
     },
     {

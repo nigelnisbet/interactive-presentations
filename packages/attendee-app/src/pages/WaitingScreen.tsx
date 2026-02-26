@@ -1,5 +1,5 @@
 import React from 'react';
-import { useSocket } from '../contexts/SocketContext';
+import { useSocket } from '../contexts/FirebaseContext';
 
 export const WaitingScreen: React.FC = () => {
   const { connected, participantCount, currentActivity } = useSocket();

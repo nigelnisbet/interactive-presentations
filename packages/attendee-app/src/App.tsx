@@ -3,13 +3,14 @@ import { BrowserRouter, Routes, Route, Navigate, useNavigate } from 'react-route
 import { JoinSession } from './pages/JoinSession';
 import { WaitingScreen } from './pages/WaitingScreen';
 import { PresenterDashboard } from './pages/PresenterDashboard';
+import { ActivityBuilder } from './pages/ActivityBuilder';
 import { Poll } from './components/activities/Poll';
 import { Quiz } from './components/activities/Quiz';
 import { WebLink } from './components/activities/WebLink';
-import { SocketProvider, useSocket } from './contexts/SocketContext';
+import { SocketProvider, useSocket } from './contexts/FirebaseContext';
 
 const ActivityRouter: React.FC = () => {
-  const { currentActivity, currentResults } = useSocket();
+  const { currentActivity } = useSocket();
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -24,6 +25,7 @@ const ActivityRouter: React.FC = () => {
       <Route path="/join/:code" element={<JoinSession />} />
       <Route path="/waiting" element={<WaitingContent />} />
       <Route path="/presenter/:code" element={<PresenterDashboard />} />
+      <Route path="/builder" element={<ActivityBuilder />} />
       <Route path="*" element={<Navigate to="/join" replace />} />
     </Routes>
   );
@@ -36,11 +38,11 @@ const WaitingContent: React.FC = () => {
   if (currentActivity) {
     switch (currentActivity.type) {
       case 'poll':
-        return <Poll activity={currentActivity} results={currentResults as any} />;
+        return <Poll activity={currentActivity as any} results={currentResults as any} />;
       case 'quiz':
-        return <Quiz activity={currentActivity} />;
+        return <Quiz activity={currentActivity as any} />;
       case 'web-link':
-        return <WebLink activity={currentActivity} />;
+        return <WebLink activity={currentActivity as any} />;
       default:
         return <WaitingScreen />;
     }
