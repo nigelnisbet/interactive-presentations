@@ -97,13 +97,31 @@ export const PresentationPicker: React.FC<PresentationPickerProps> = ({ onSelect
           {filteredPresentations.map(presentation => (
             <div
               key={presentation.id}
-              onClick={() => onSelect(presentation.id)}
               style={styles.listItem}
             >
-              <span style={styles.presentationId}>{presentation.id}</span>
-              <span style={styles.activityCount}>
-                {presentation.activityCount} {presentation.activityCount === 1 ? 'activity' : 'activities'}
-              </span>
+              <div
+                onClick={() => onSelect(presentation.id)}
+                style={styles.listItemMain}
+              >
+                <span style={styles.presentationId}>{presentation.id}</span>
+                <span style={styles.activityCount}>
+                  {presentation.activityCount} {presentation.activityCount === 1 ? 'activity' : 'activities'}
+                </span>
+              </div>
+              <a
+                href={`https://slides.com/d/${presentation.id}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                onClick={(e) => e.stopPropagation()}
+                style={styles.slidesLink}
+                title="Open in slides.com"
+              >
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" />
+                  <polyline points="15 3 21 3 21 9" />
+                  <line x1="10" y1="14" x2="21" y2="3" />
+                </svg>
+              </a>
             </div>
           ))}
         </div>
@@ -169,15 +187,21 @@ const styles: Record<string, React.CSSProperties> = {
   },
   listItem: {
     display: 'flex',
-    justifyContent: 'space-between',
     alignItems: 'center',
     padding: '12px 16px',
     border: '1px solid #e5e7eb',
     borderRadius: '6px',
     marginBottom: '8px',
-    cursor: 'pointer',
     transition: 'all 0.2s ease',
     backgroundColor: '#fafafa',
+    gap: '12px',
+  },
+  listItemMain: {
+    flex: 1,
+    display: 'flex',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    cursor: 'pointer',
   },
   presentationId: {
     fontWeight: '500',
@@ -189,5 +213,15 @@ const styles: Record<string, React.CSSProperties> = {
     backgroundColor: '#e5e7eb',
     padding: '4px 8px',
     borderRadius: '12px',
+  },
+  slidesLink: {
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: '8px',
+    color: '#6366f1',
+    borderRadius: '4px',
+    transition: 'background-color 0.2s',
+    textDecoration: 'none',
   },
 };

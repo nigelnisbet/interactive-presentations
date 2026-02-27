@@ -122,7 +122,16 @@ const Popup: React.FC = () => {
       <div style={styles.container}>
         <h2 style={styles.title}>Interactive Presentations</h2>
         <div style={styles.warning}>
-          <p>Please open a slides.com presentation to use this extension.</p>
+          <p>Please open a slides.com presentation to create a live session.</p>
+        </div>
+        <button
+          style={styles.builderButton}
+          onClick={() => window.open('https://presentations.stmath.com/builder', '_blank')}
+        >
+          Open Activity Builder
+        </button>
+        <div style={styles.footer}>
+          <small>Create or edit attendee activities</small>
         </div>
       </div>
     );
@@ -187,6 +196,13 @@ const Popup: React.FC = () => {
 
       <button style={styles.endButton} onClick={endSession}>
         End Session
+      </button>
+
+      <button
+        style={styles.builderButton}
+        onClick={() => window.open('https://presentations.stmath.com/builder', '_blank')}
+      >
+        Edit Activities
       </button>
 
       <div style={styles.footer}>
@@ -272,6 +288,18 @@ const styles = {
     fontWeight: 600,
     cursor: 'pointer',
     marginTop: '8px',
+  },
+  builderButton: {
+    width: '100%',
+    padding: '10px 24px',
+    backgroundColor: '#6366f1',
+    color: 'white',
+    border: 'none',
+    borderRadius: '6px',
+    fontSize: '14px',
+    fontWeight: 600,
+    cursor: 'pointer',
+    marginTop: '12px',
   },
   sessionCode: {
     backgroundColor: 'white',
