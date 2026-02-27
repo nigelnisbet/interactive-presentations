@@ -109,7 +109,7 @@ export const PresentationPicker: React.FC<PresentationPickerProps> = ({ onSelect
                 </span>
               </div>
               <a
-                href={`https://slides.com/d/${presentation.id}`}
+                href={`https://mind.slides.com/d/${presentation.id}/live`}
                 target="_blank"
                 rel="noopener noreferrer"
                 onClick={(e) => e.stopPropagation()}
