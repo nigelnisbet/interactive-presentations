@@ -32,7 +32,7 @@ const firebaseConfig = {
 const app = initializeApp(firebaseConfig);
 const database = getDatabase(app);
 
-// Session state
+// Session state (in-memory, restored from storage on wake)
 let currentSessionCode: string | null = null;
 let currentSessionId: string | null = null;
 let currentQRCode: string | null = null;
@@ -40,6 +40,98 @@ let currentPresentationId: string | null = null;
 let activities: any[] = [];
 let participantCount = 0;
 let unsubscribeParticipants: Unsubscribe | null = null;
+
+// Restore session state from storage on service worker start
+async function restoreSessionState() {
+  try {
+    const stored = await chrome.storage.local.get(['sessionState']);
+    if (stored.sessionState) {
+      const state = stored.sessionState;
+      currentSessionCode = state.sessionCode;
+      currentSessionId = state.sessionId;
+      currentQRCode = state.qrCode;
+      currentPresentationId = state.presentationId;
+      activities = state.activities || [];
+      participantCount = state.participantCount || 0;
+
+      console.log('[Interactive Presentations] Session state restored:', currentSessionCode);
+
+      // Re-setup participant listener if we have an active session
+      if (currentSessionCode) {
+        setupParticipantListener(currentSessionCode);
+        startKeepAlive();
+      }
+    }
+  } catch (error) {
+    console.error('[Interactive Presentations] Error restoring session state:', error);
+  }
+}
+
+// Save session state to storage
+async function saveSessionState() {
+  try {
+    await chrome.storage.local.set({
+      sessionState: {
+        sessionCode: currentSessionCode,
+        sessionId: currentSessionId,
+        qrCode: currentQRCode,
+        presentationId: currentPresentationId,
+        activities,
+        participantCount,
+      }
+    });
+    console.log('[Interactive Presentations] Session state saved');
+  } catch (error) {
+    console.error('[Interactive Presentations] Error saving session state:', error);
+  }
+}
+
+// Clear session state from storage
+async function clearSessionState() {
+  try {
+    await chrome.storage.local.remove(['sessionState']);
+    console.log('[Interactive Presentations] Session state cleared');
+  } catch (error) {
+    console.error('[Interactive Presentations] Error clearing session state:', error);
+  }
+}
+
+// Restore state immediately on load
+restoreSessionState();
+
+// Keep-alive alarm to prevent service worker from sleeping during active sessions
+const KEEP_ALIVE_ALARM = 'keep-alive';
+
+chrome.alarms.onAlarm.addListener((alarm) => {
+  if (alarm.name === KEEP_ALIVE_ALARM) {
+    console.log('[Interactive Presentations] Keep-alive ping');
+    // Just accessing storage keeps the service worker alive
+    chrome.storage.local.get(['sessionState']).then((result) => {
+      if (result.sessionState?.sessionCode) {
+        // Session is active, keep the alarm going
+        console.log('[Interactive Presentations] Session still active:', result.sessionState.sessionCode);
+      } else {
+        // No active session, stop the alarm
+        chrome.alarms.clear(KEEP_ALIVE_ALARM);
+        console.log('[Interactive Presentations] No active session, stopping keep-alive');
+      }
+    });
+  }
+});
+
+// Start keep-alive alarm when session is active
+function startKeepAlive() {
+  chrome.alarms.create(KEEP_ALIVE_ALARM, {
+    periodInMinutes: 0.4 // Every 24 seconds (under the 30 second limit)
+  });
+  console.log('[Interactive Presentations] Keep-alive alarm started');
+}
+
+// Stop keep-alive alarm
+function stopKeepAlive() {
+  chrome.alarms.clear(KEEP_ALIVE_ALARM);
+  console.log('[Interactive Presentations] Keep-alive alarm stopped');
+}
 
 // Generate 6-character session code (avoiding confusing characters)
 function generateSessionCode(): string {
@@ -86,23 +178,26 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   }
 
   if (message.type === 'GET_SESSION_INFO') {
-    // Check Firebase connection
-    const connectedRef = ref(database, '.info/connected');
-    get(connectedRef).then((snapshot) => {
-      sendResponse({
-        sessionId: currentSessionId,
-        sessionCode: currentSessionCode,
-        qrCode: currentQRCode,
-        participantCount,
-        connected: snapshot.val() === true,
-      });
-    }).catch(() => {
-      sendResponse({
-        sessionId: currentSessionId,
-        sessionCode: currentSessionCode,
-        qrCode: currentQRCode,
-        participantCount,
-        connected: false,
+    // First ensure state is restored, then respond
+    restoreSessionState().then(() => {
+      // Check Firebase connection
+      const connectedRef = ref(database, '.info/connected');
+      get(connectedRef).then((snapshot) => {
+        sendResponse({
+          sessionId: currentSessionId,
+          sessionCode: currentSessionCode,
+          qrCode: currentQRCode,
+          participantCount,
+          connected: snapshot.val() === true,
+        });
+      }).catch(() => {
+        sendResponse({
+          sessionId: currentSessionId,
+          sessionCode: currentSessionCode,
+          qrCode: currentQRCode,
+          participantCount,
+          connected: false,
+        });
       });
     });
     return true; // Keep channel open for async response
@@ -254,6 +349,12 @@ async function createSession(presentationId: string) {
     // Setup participant count listener
     setupParticipantListener(code);
 
+    // Save session state to storage for persistence
+    await saveSessionState();
+
+    // Start keep-alive to maintain connection
+    startKeepAlive();
+
     console.log('[Interactive Presentations] Session created:', { code, sessionId });
 
     return {
@@ -284,6 +385,9 @@ function setupParticipantListener(sessionCode: string) {
 
     console.log('[Interactive Presentations] Participant count updated:', participantCount);
 
+    // Save updated count to storage
+    saveSessionState();
+
     // Notify popup if open
     chrome.runtime.sendMessage({
       type: 'SESSION_STATS_UPDATE',
@@ -295,6 +399,11 @@ function setupParticipantListener(sessionCode: string) {
 }
 
 async function handleSlideChange(slideData: { indexh: number; indexv: number; timestamp: number }) {
+  // Ensure state is restored before handling
+  if (!currentSessionCode) {
+    await restoreSessionState();
+  }
+
   if (!currentSessionCode) {
     console.log('[Interactive Presentations] No active session, ignoring slide change');
     return;
@@ -361,6 +470,12 @@ async function endSession() {
   currentPresentationId = null;
   activities = [];
   participantCount = 0;
+
+  // Clear persisted state
+  await clearSessionState();
+
+  // Stop keep-alive
+  stopKeepAlive();
 }
 
 export {};

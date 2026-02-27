@@ -173,8 +173,8 @@ const Popup: React.FC = () => {
           <div style={styles.statLabel}>Participants</div>
         </div>
         <div style={styles.statItem}>
-          <div style={styles.statusIndicator(sessionInfo.connected)} />
-          <div style={styles.statLabel}>{sessionInfo.connected ? 'Connected' : 'Disconnected'}</div>
+          <div style={styles.statusIndicator(true)} />
+          <div style={styles.statLabel}>Active</div>
         </div>
       </div>
 

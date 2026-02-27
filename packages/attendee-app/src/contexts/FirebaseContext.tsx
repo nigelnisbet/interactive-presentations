@@ -104,6 +104,10 @@ export const FirebaseProvider: React.FC<{ children: ReactNode }> = ({ children }
       console.log('Session status:', status);
       if (status === 'ended') {
         setError('Session has ended');
+        setConnected(false);
+        setCurrentActivity(null);
+        setCurrentResults(null);
+        setParticipantCount(0);
         sessionStorage.removeItem('currentSessionCode');
         sessionStorage.removeItem('attendeeName');
         sessionStorage.removeItem('participantId');
