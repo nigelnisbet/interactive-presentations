@@ -157,6 +157,15 @@ const Popup: React.FC = () => {
         <button style={styles.button} onClick={createSession}>
           Create Session
         </button>
+        <button
+          style={styles.builderButton}
+          onClick={() => window.open('https://presentations.stmath.com/builder', '_blank')}
+        >
+          Open Activity Builder
+        </button>
+        <div style={styles.footer}>
+          <small>Create or edit attendee activities</small>
+        </div>
       </div>
     );
   }

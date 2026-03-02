@@ -3,6 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { useSocket } from '../contexts/FirebaseContext';
 import { PollResults } from '../components/presenter/PollResults';
 import { QuizResults } from '../components/presenter/QuizResults';
+import { TextResponseResults } from '../components/presenter/TextResponseResults';
 
 export const PresenterDashboard: React.FC = () => {
   const { code } = useParams<{ code: string }>();
@@ -103,6 +104,7 @@ export const PresenterDashboard: React.FC = () => {
                     {currentActivity.type === 'poll' && (currentActivity as any).question}
                     {currentActivity.type === 'quiz' && (currentActivity as any).question}
                     {currentActivity.type === 'web-link' && (currentActivity as any).title}
+                    {currentActivity.type === 'text-response' && (currentActivity as any).prompt}
                   </h2>
                 </div>
                 <div className="text-right">
@@ -133,6 +135,9 @@ export const PresenterDashboard: React.FC = () => {
                   Open Activity
                 </a>
               </div>
+            )}
+            {currentActivity.type === 'text-response' && code && (
+              <TextResponseResults activity={currentActivity as any} sessionCode={code} />
             )}
           </div>
         )}

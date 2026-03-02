@@ -37,9 +37,13 @@ export class SocketHandler {
       this.setupPresenterEvents(socket);
       this.setupAttendeeEvents(socket);
 
-      socket.on('disconnect', () => {
-        console.log(`Client disconnected: ${socket.id}`);
+      socket.on('disconnect', (reason) => {
+        console.log(`Client disconnected: ${socket.id}, reason: ${reason}`);
         this.handleDisconnect(socket);
+      });
+
+      socket.on('error', (error) => {
+        console.error(`Socket error for ${socket.id}:`, error);
       });
     });
 
@@ -111,9 +115,12 @@ export class SocketHandler {
         const activity = this.sessionManager.getActivityAtSlide(session, slidePosition);
 
         if (activity) {
-          // Broadcast activity to attendees
+          // Broadcast activity to attendees with activityId
           this.io.to(sessionId).emit(SessionEvents.ACTIVITY_STARTED, {
-            activity: activity.config,
+            activity: {
+              ...activity.config,
+              activityId: activity.activityId,
+            },
           });
 
           socket.emit(PresenterEvents.SLIDE_ACKNOWLEDGED, {
@@ -298,14 +305,27 @@ export class SocketHandler {
         // Aggregate and broadcast results
         const updatedSession = await this.sessionManager.getSession(sessionId);
         if (updatedSession && activity.config.type === 'poll') {
-          const pollActivity = activity.config;
+          const pollActivity = activity.config as any;
+          console.log(`Poll activity showResults: ${pollActivity.showResults}`);
           if (pollActivity.showResults === 'live') {
-            const results = this.pollHandler.aggregateResults(pollActivity, updatedSession);
+            // Include activityId in the poll activity for aggregation
+            const pollActivityWithId = { ...pollActivity, activityId: activity.activityId };
+            const results = this.pollHandler.aggregateResults(pollActivityWithId, updatedSession);
+            console.log(`Broadcasting results for ${activityId}:`, results);
             this.io.to(sessionId).emit(SessionEvents.RESULTS_UPDATED, {
               activityId,
               results,
             });
           }
+        } else if (updatedSession && activity.config.type === 'quiz') {
+          // Include activityId in the quiz activity for aggregation
+          const quizActivityWithId = { ...activity.config, activityId: activity.activityId } as any;
+          const results = this.quizHandler.aggregateResults(quizActivityWithId, updatedSession);
+          console.log(`Broadcasting quiz results for ${activityId}:`, results);
+          this.io.to(sessionId).emit(SessionEvents.RESULTS_UPDATED, {
+            activityId,
+            results,
+          });
         }
 
         console.log(`Response submitted for activity ${activityId} by ${socket.id}`);

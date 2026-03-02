@@ -35,11 +35,19 @@ export class QuizHandler {
     let incorrectCount = 0;
     let totalTime = 0;
     let timeCount = 0;
+    const responses = Array(activity.options.length).fill(0);
     const leaderboard: LeaderboardEntry[] = [];
 
     for (const participant of session.participants.values()) {
       const response = participant.responses.get(activity.activityId || '');
       if (response) {
+        const answer = response.answer;
+
+        // Track response per option
+        if (typeof answer === 'number' && answer >= 0 && answer < activity.options.length) {
+          responses[answer]++;
+        }
+
         if (response.isCorrect) {
           correctCount++;
         } else {
@@ -78,6 +86,8 @@ export class QuizHandler {
       correctAnswer: activity.correctAnswer,
       correctCount,
       incorrectCount,
+      responses,
+      totalResponses: correctCount + incorrectCount,
       averageTime: timeCount > 0 ? totalTime / timeCount / 1000 : undefined, // seconds
       leaderboard: leaderboard.slice(0, 10), // Top 10
     };

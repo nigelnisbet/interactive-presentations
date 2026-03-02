@@ -1,6 +1,6 @@
 import React from 'react';
 
-export type ActivityType = 'poll' | 'quiz' | 'web-link';
+export type ActivityType = 'poll' | 'quiz' | 'web-link' | 'text-response';
 
 export type ActivityFormData = {
   type: ActivityType;
@@ -22,6 +22,11 @@ export type ActivityFormData = {
   url?: string;
   displayMode?: 'iframe' | 'new-tab' | 'redirect';
   fullScreen?: boolean;
+
+  // Text-response specific
+  prompt?: string;
+  placeholder?: string;
+  maxLength?: number;
 };
 
 export const getDefaultActivity = (type: ActivityType = 'poll', indexh = 0, indexv = 0): ActivityFormData => {
@@ -35,6 +40,16 @@ export const getDefaultActivity = (type: ActivityType = 'poll', indexh = 0, inde
       url: '',
       displayMode: 'iframe',
       fullScreen: false,
+    };
+  }
+  if (type === 'text-response') {
+    return {
+      type,
+      activityId: '',
+      slidePosition: { indexh, indexv },
+      prompt: '',
+      placeholder: 'Type your response here...',
+      maxLength: 500,
     };
   }
   return {
@@ -72,6 +87,8 @@ export const validateActivity = (activity: ActivityFormData): string | null => {
     } catch {
       return 'Please enter a valid URL';
     }
+  } else if (activity.type === 'text-response') {
+    if (!activity.prompt?.trim()) return 'Prompt/question is required';
   }
 
   return null;
@@ -131,6 +148,7 @@ export const ActivityFormFields: React.FC<ActivityFormFieldsProps> = ({
         >
           <option value="poll">Poll (Multiple Choice)</option>
           <option value="quiz">Quiz (With Correct Answer)</option>
+          <option value="text-response">Open-Ended Text Response</option>
           <option value="web-link">Web Link / ST Math Game</option>
         </select>
       </label>
@@ -253,6 +271,46 @@ export const ActivityFormFields: React.FC<ActivityFormFieldsProps> = ({
               <option value="end">At End (after activity closes)</option>
               <option value="never">Never (presenter only)</option>
             </select>
+          </label>
+        </>
+      )}
+
+      {/* Text Response Fields */}
+      {activity.type === 'text-response' && (
+        <>
+          <label style={styles.label}>
+            Prompt / Question
+            <input
+              type="text"
+              value={activity.prompt || ''}
+              onChange={(e) => onChange({ ...activity, prompt: e.target.value })}
+              placeholder="e.g., What are your thoughts on...?"
+              style={styles.input}
+            />
+          </label>
+
+          <label style={styles.label}>
+            Placeholder Text (optional)
+            <small style={styles.hint}>Hint text shown in the input box</small>
+            <input
+              type="text"
+              value={activity.placeholder || ''}
+              onChange={(e) => onChange({ ...activity, placeholder: e.target.value })}
+              placeholder="e.g., Type your response here..."
+              style={styles.input}
+            />
+          </label>
+
+          <label style={styles.label}>
+            Max Character Length
+            <input
+              type="number"
+              value={activity.maxLength || 500}
+              onChange={(e) => onChange({ ...activity, maxLength: parseInt(e.target.value) || 500 })}
+              min="50"
+              max="2000"
+              style={styles.input}
+            />
           </label>
         </>
       )}

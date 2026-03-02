@@ -24,10 +24,19 @@ const WebLinkIcon = () => (
   </svg>
 );
 
-const activityColors = {
+const TextResponseIcon = () => (
+  <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+    <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
+    <line x1="8" y1="9" x2="16" y2="9" />
+    <line x1="8" y1="13" x2="14" y2="13" />
+  </svg>
+);
+
+const activityColors: Record<string, { bg: string; border: string; text: string }> = {
   poll: { bg: '#dbeafe', border: '#3b82f6', text: '#1e40af' },
   quiz: { bg: '#fef3c7', border: '#f59e0b', text: '#92400e' },
   'web-link': { bg: '#d1fae5', border: '#10b981', text: '#065f46' },
+  'text-response': { bg: '#fae8ff', border: '#c026d3', text: '#86198f' },
 };
 
 interface SlideThumbnailProps {
@@ -57,6 +66,7 @@ export const SlideThumbnail: React.FC<SlideThumbnailProps> = ({
       case 'poll': return <PollIcon />;
       case 'quiz': return <QuizIcon />;
       case 'web-link': return <WebLinkIcon />;
+      case 'text-response': return <TextResponseIcon />;
       default: return null;
     }
   };
@@ -65,6 +75,9 @@ export const SlideThumbnail: React.FC<SlideThumbnailProps> = ({
     if (!activity) return null;
     if (activity.type === 'web-link') {
       return activity.title;
+    }
+    if (activity.type === 'text-response') {
+      return activity.prompt;
     }
     return activity.question;
   };

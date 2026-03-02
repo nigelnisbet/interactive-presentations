@@ -7,6 +7,7 @@ import { ActivityBuilder } from './pages/ActivityBuilder';
 import { Poll } from './components/activities/Poll';
 import { Quiz } from './components/activities/Quiz';
 import { WebLink } from './components/activities/WebLink';
+import { TextResponse } from './components/activities/TextResponse';
 import { SocketProvider, useSocket } from './contexts/FirebaseContext';
 
 const ActivityRouter: React.FC = () => {
@@ -43,6 +44,8 @@ const WaitingContent: React.FC = () => {
         return <Quiz activity={currentActivity as any} />;
       case 'web-link':
         return <WebLink activity={currentActivity as any} />;
+      case 'text-response':
+        return <TextResponse activity={currentActivity as any} />;
       default:
         return <WaitingScreen />;
     }

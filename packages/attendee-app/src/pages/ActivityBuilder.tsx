@@ -78,6 +78,10 @@ export const ActivityBuilder: React.FC = () => {
           url: act.config?.url,
           displayMode: act.config?.displayMode || 'iframe',
           fullScreen: act.config?.fullScreen || false,
+          // Text-response fields
+          prompt: act.config?.prompt,
+          placeholder: act.config?.placeholder,
+          maxLength: act.config?.maxLength,
         }));
       }
 
@@ -232,6 +236,16 @@ export const ActivityBuilder: React.FC = () => {
               timeLimit: activity.timeLimit,
               showResults: activity.showResults,
               points: 100,
+            },
+          };
+        } else if (activity.type === 'text-response') {
+          return {
+            ...base,
+            config: {
+              type: 'text-response',
+              prompt: activity.prompt,
+              placeholder: activity.placeholder,
+              maxLength: activity.maxLength,
             },
           };
         } else {

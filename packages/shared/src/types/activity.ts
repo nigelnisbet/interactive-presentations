@@ -7,7 +7,7 @@ export interface ActivityConfig {
   config: ActivityDefinition;
 }
 
-export type ActivityType = 'poll' | 'quiz' | 'stmath-game' | 'word-cloud' | 'web-link';
+export type ActivityType = 'poll' | 'quiz' | 'stmath-game' | 'word-cloud' | 'web-link' | 'text-response';
 
 export interface ActivityDefinition {
   type: ActivityType;
@@ -53,6 +53,13 @@ export interface WebLinkActivity extends ActivityDefinition {
   description?: string;
   displayMode: 'iframe' | 'new-tab' | 'redirect';
   iframeHeight?: string;
+}
+
+export interface TextResponseActivity extends ActivityDefinition {
+  type: 'text-response';
+  prompt: string;
+  placeholder?: string;
+  maxLength?: number;
 }
 
 // Results aggregation
