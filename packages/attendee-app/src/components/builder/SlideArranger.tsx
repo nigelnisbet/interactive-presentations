@@ -7,41 +7,82 @@ interface SlideArrangerProps {
   presentationId: string;
   presentationTitle: string;
   onTitleChange: (title: string) => void;
+  tags: string[];
+  onTagsChange: (tags: string[]) => void;
   horizontalCount: number;
   verticalCounts: Map<number, number>; // indexh -> vertical slide count
   activities: ActivityFormData[];
-  selectedSlide: { indexh: number; indexv: number } | null;
-  onSlideClick: (indexh: number, indexv: number) => void;
+  // Multi-select support
+  selectedSlides: Set<string>;
+  onSlideClick: (indexh: number, indexv: number, shiftKey: boolean) => void;
+  onSlideDoubleClick: (indexh: number, indexv: number) => void;
   onAddHorizontal: () => void;
   onAddVertical: (indexh: number) => void;
   onSave: () => void;
   onBack: () => void;
   saving: boolean;
   hasChanges: boolean;
+  // Drag & drop
+  draggedSlide: { indexh: number; indexv: number } | null;
+  dropTarget: { indexh: number; indexv: number } | null;
+  onDragStart: (indexh: number, indexv: number) => void;
+  onDragEnd: () => void;
+  onDragOver: (indexh: number, indexv: number) => void;
+  onDrop: (indexh: number, indexv: number) => void;
+  // Copy/repoint dialogs
+  onShowCopyDialog: () => void;
+  onShowRepointDialog: () => void;
 }
 
 export const SlideArranger: React.FC<SlideArrangerProps> = ({
   presentationId,
   presentationTitle,
   onTitleChange,
+  tags,
+  onTagsChange,
   horizontalCount,
   verticalCounts,
   activities,
-  selectedSlide,
+  selectedSlides,
   onSlideClick,
+  onSlideDoubleClick,
   onAddHorizontal,
   onAddVertical,
   onSave,
   onBack,
   saving,
   hasChanges,
+  draggedSlide,
+  dropTarget,
+  onDragStart,
+  onDragEnd,
+  onDragOver,
+  onDrop,
+  onShowCopyDialog,
+  onShowRepointDialog,
 }) => {
   const [isEditingTitle, setIsEditingTitle] = useState(false);
   const [editedTitle, setEditedTitle] = useState(presentationTitle);
+  const [newTag, setNewTag] = useState('');
+  const [showTagInput, setShowTagInput] = useState(false);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const [isDragging, setIsDragging] = useState(false);
   const [startX, setStartX] = useState(0);
   const [scrollLeft, setScrollLeft] = useState(0);
+
+  // Tag management
+  const handleAddTag = () => {
+    const trimmedTag = newTag.trim();
+    if (trimmedTag && !tags.includes(trimmedTag)) {
+      onTagsChange([...tags, trimmedTag]);
+    }
+    setNewTag('');
+    setShowTagInput(false);
+  };
+
+  const handleRemoveTag = (tagToRemove: string) => {
+    onTagsChange(tags.filter(t => t !== tagToRemove));
+  };
 
   // Click-and-drag scrolling
   const handleMouseDown = useCallback((e: React.MouseEvent) => {
@@ -77,9 +118,16 @@ export const SlideArranger: React.FC<SlideArrangerProps> = ({
         indexh={ih}
         verticalCount={vertCount}
         activities={activities}
-        selectedSlide={selectedSlide}
+        selectedSlides={selectedSlides}
         onSlideClick={onSlideClick}
+        onSlideDoubleClick={onSlideDoubleClick}
         onAddVertical={onAddVertical}
+        draggedSlide={draggedSlide}
+        dropTarget={dropTarget}
+        onDragStart={onDragStart}
+        onDragEnd={onDragEnd}
+        onDragOver={onDragOver}
+        onDrop={onDrop}
       />
     );
   }
@@ -131,6 +179,50 @@ export const SlideArranger: React.FC<SlideArrangerProps> = ({
             {presentationTitle && (
               <span style={styles.presentationIdSmall}>ID: {presentationId}</span>
             )}
+            {/* Tags section */}
+            <div style={styles.tagsSection}>
+              {tags.map(tag => (
+                <span key={tag} style={styles.tagChip}>
+                  {tag}
+                  <button
+                    onClick={() => handleRemoveTag(tag)}
+                    style={styles.tagRemoveBtn}
+                    title="Remove tag"
+                  >
+                    ×
+                  </button>
+                </span>
+              ))}
+              {showTagInput ? (
+                <input
+                  type="text"
+                  value={newTag}
+                  onChange={(e) => setNewTag(e.target.value)}
+                  onBlur={() => {
+                    if (newTag.trim()) handleAddTag();
+                    else setShowTagInput(false);
+                  }}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') handleAddTag();
+                    else if (e.key === 'Escape') {
+                      setNewTag('');
+                      setShowTagInput(false);
+                    }
+                  }}
+                  placeholder="Enter tag..."
+                  style={styles.tagInput}
+                  autoFocus
+                />
+              ) : (
+                <button
+                  onClick={() => setShowTagInput(true)}
+                  style={styles.addTagBtn}
+                  title="Add tag"
+                >
+                  + Add Tag
+                </button>
+              )}
+            </div>
           </div>
           <span style={styles.slideCount}>
             {horizontalCount} slides · {activities.length} activities
@@ -138,6 +230,12 @@ export const SlideArranger: React.FC<SlideArrangerProps> = ({
         </div>
         <div style={styles.headerRight}>
           {hasChanges && <span style={styles.unsavedIndicator}>Unsaved changes</span>}
+          <button onClick={onShowRepointDialog} style={styles.secondaryBtn} title="Change presentation URL">
+            Re-point
+          </button>
+          <button onClick={onShowCopyDialog} style={styles.secondaryBtn} title="Copy activities to another presentation">
+            Copy to...
+          </button>
           <button
             onClick={onSave}
             style={{
@@ -153,7 +251,7 @@ export const SlideArranger: React.FC<SlideArrangerProps> = ({
 
       {/* Instructions */}
       <div style={styles.instructions}>
-        Click a slide to add or edit an activity. Drag to scroll.
+        Double-click to edit. Shift-click to multi-select. Drag slides to reorder.
       </div>
 
       {/* Slide Grid */}
@@ -255,6 +353,53 @@ const styles: Record<string, React.CSSProperties> = {
     color: '#6b7280',
     fontFamily: 'monospace',
   },
+  tagsSection: {
+    display: 'flex',
+    flexWrap: 'wrap',
+    alignItems: 'center',
+    gap: '6px',
+    marginTop: '4px',
+  },
+  tagChip: {
+    display: 'inline-flex',
+    alignItems: 'center',
+    gap: '4px',
+    fontSize: '11px',
+    color: '#e5e7eb',
+    backgroundColor: 'rgba(99, 102, 241, 0.3)',
+    padding: '2px 8px',
+    borderRadius: '10px',
+    border: '1px solid rgba(99, 102, 241, 0.5)',
+  },
+  tagRemoveBtn: {
+    background: 'none',
+    border: 'none',
+    color: '#9ca3af',
+    cursor: 'pointer',
+    fontSize: '14px',
+    lineHeight: 1,
+    padding: '0 2px',
+    marginLeft: '2px',
+  },
+  tagInput: {
+    fontSize: '11px',
+    backgroundColor: '#1a1a2e',
+    border: '1px solid #4b5563',
+    borderRadius: '10px',
+    color: 'white',
+    padding: '2px 8px',
+    width: '100px',
+    outline: 'none',
+  },
+  addTagBtn: {
+    fontSize: '11px',
+    color: '#9ca3af',
+    backgroundColor: 'transparent',
+    border: '1px dashed #4b5563',
+    borderRadius: '10px',
+    padding: '2px 8px',
+    cursor: 'pointer',
+  },
   slideCount: {
     fontSize: '14px',
     color: '#9ca3af',
@@ -265,6 +410,15 @@ const styles: Record<string, React.CSSProperties> = {
     padding: '4px 8px',
     backgroundColor: 'rgba(245, 158, 11, 0.1)',
     borderRadius: '4px',
+  },
+  secondaryBtn: {
+    padding: '8px 16px',
+    backgroundColor: 'transparent',
+    color: '#9ca3af',
+    border: '1px solid #4b5563',
+    borderRadius: '6px',
+    cursor: 'pointer',
+    fontSize: '13px',
   },
   saveBtn: {
     padding: '10px 24px',

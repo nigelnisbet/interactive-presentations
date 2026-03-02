@@ -61,7 +61,7 @@ export const Poll: React.FC<PollProps> = ({ activity, results }) => {
           {activity.options.map((option, index) => {
             const isSelected = selectedOptions.includes(index);
             const percentage = results
-              ? Math.round((results.responses[index] / Math.max(results.totalResponses, 1)) * 100)
+              ? Math.round(((results.responses[index] || 0) / Math.max(results.totalResponses, 1)) * 100)
               : 0;
 
             return (

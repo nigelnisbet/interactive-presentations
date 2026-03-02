@@ -6,18 +6,33 @@ interface VerticalSlideColumnProps {
   indexh: number;
   verticalCount: number; // Number of vertical slides (minimum 1 for the main slide)
   activities: ActivityFormData[];
-  selectedSlide: { indexh: number; indexv: number } | null;
-  onSlideClick: (indexh: number, indexv: number) => void;
+  selectedSlides: Set<string>;
+  onSlideClick: (indexh: number, indexv: number, shiftKey: boolean) => void;
+  onSlideDoubleClick: (indexh: number, indexv: number) => void;
   onAddVertical: (indexh: number) => void;
+  // Drag & drop
+  draggedSlide: { indexh: number; indexv: number } | null;
+  dropTarget: { indexh: number; indexv: number } | null;
+  onDragStart: (indexh: number, indexv: number) => void;
+  onDragEnd: () => void;
+  onDragOver: (indexh: number, indexv: number) => void;
+  onDrop: (indexh: number, indexv: number) => void;
 }
 
 export const VerticalSlideColumn: React.FC<VerticalSlideColumnProps> = ({
   indexh,
   verticalCount,
   activities,
-  selectedSlide,
+  selectedSlides,
   onSlideClick,
+  onSlideDoubleClick,
   onAddVertical,
+  draggedSlide,
+  dropTarget,
+  onDragStart,
+  onDragEnd,
+  onDragOver,
+  onDrop,
 }) => {
   // Get activity at a specific position
   const getActivityAt = (ih: number, iv: number) => {
@@ -26,9 +41,19 @@ export const VerticalSlideColumn: React.FC<VerticalSlideColumnProps> = ({
     );
   };
 
-  // Check if a slide is selected
+  // Check if a slide is selected (uses Set<string> with "h-v" keys)
   const isSelected = (ih: number, iv: number) => {
-    return selectedSlide?.indexh === ih && selectedSlide?.indexv === iv;
+    return selectedSlides.has(`${ih}-${iv}`);
+  };
+
+  // Check if a slide is being dragged
+  const isDragging = (ih: number, iv: number) => {
+    return draggedSlide?.indexh === ih && draggedSlide?.indexv === iv;
+  };
+
+  // Check if a slide is the drop target
+  const isDropTarget = (ih: number, iv: number) => {
+    return dropTarget?.indexh === ih && dropTarget?.indexv === iv;
   };
 
   // Render vertical slides (indexv: 0, 1, 2, ...)
@@ -40,8 +65,15 @@ export const VerticalSlideColumn: React.FC<VerticalSlideColumnProps> = ({
         indexh={indexh}
         indexv={iv}
         activity={getActivityAt(indexh, iv)}
-        onClick={() => onSlideClick(indexh, iv)}
+        onClick={(shiftKey) => onSlideClick(indexh, iv, shiftKey)}
+        onDoubleClick={() => onSlideDoubleClick(indexh, iv)}
         isSelected={isSelected(indexh, iv)}
+        isDragging={isDragging(indexh, iv)}
+        isDropTarget={isDropTarget(indexh, iv)}
+        onDragStart={() => onDragStart(indexh, iv)}
+        onDragEnd={onDragEnd}
+        onDragOver={() => onDragOver(indexh, iv)}
+        onDrop={() => onDrop(indexh, iv)}
       />
     );
   }

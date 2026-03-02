@@ -43,8 +43,16 @@ interface SlideThumbnailProps {
   indexh: number;
   indexv: number;
   activity?: ActivityFormData;
-  onClick: () => void;
+  onClick: (shiftKey: boolean) => void;
+  onDoubleClick?: () => void;
   isSelected?: boolean;
+  // Drag & drop props
+  isDragging?: boolean;
+  isDropTarget?: boolean;
+  onDragStart?: () => void;
+  onDragEnd?: () => void;
+  onDragOver?: () => void;
+  onDrop?: () => void;
 }
 
 export const SlideThumbnail: React.FC<SlideThumbnailProps> = ({
@@ -52,7 +60,14 @@ export const SlideThumbnail: React.FC<SlideThumbnailProps> = ({
   indexv,
   activity,
   onClick,
+  onDoubleClick,
   isSelected = false,
+  isDragging = false,
+  isDropTarget = false,
+  onDragStart,
+  onDragEnd,
+  onDragOver,
+  onDrop,
 }) => {
   const displayNumber = indexv === 0
     ? `${indexh + 1}`
@@ -82,14 +97,42 @@ export const SlideThumbnail: React.FC<SlideThumbnailProps> = ({
     return activity.question;
   };
 
+  const handleDragStart = (e: React.DragEvent) => {
+    e.dataTransfer.setData('text/plain', `${indexh}-${indexv}`);
+    e.dataTransfer.effectAllowed = 'move';
+    onDragStart?.();
+  };
+
+  const handleDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+    onDragOver?.();
+  };
+
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    onDrop?.();
+  };
+
   return (
     <div
-      onClick={onClick}
+      draggable
+      onClick={(e) => onClick(e.shiftKey)}
+      onDoubleClick={onDoubleClick}
+      onDragStart={handleDragStart}
+      onDragEnd={onDragEnd}
+      onDragOver={handleDragOver}
+      onDrop={handleDrop}
       style={{
         ...styles.thumbnail,
         backgroundColor: activity ? colors?.bg : '#374151',
-        borderColor: isSelected ? '#fff' : (colors?.border || '#4b5563'),
-        boxShadow: isSelected ? '0 0 0 3px #3b82f6' : '0 2px 8px rgba(0,0,0,0.2)',
+        borderColor: isDropTarget ? '#10b981' : (isSelected ? '#fff' : (colors?.border || '#4b5563')),
+        borderStyle: isDropTarget ? 'dashed' : 'solid',
+        boxShadow: isSelected
+          ? '0 0 0 3px #3b82f6, 0 0 0 5px rgba(59, 130, 246, 0.3)'
+          : '0 2px 8px rgba(0,0,0,0.2)',
+        opacity: isDragging ? 0.5 : 1,
+        transform: isDragging ? 'scale(0.95)' : 'scale(1)',
       }}
     >
       <div style={styles.slideNumber}>{displayNumber}</div>
