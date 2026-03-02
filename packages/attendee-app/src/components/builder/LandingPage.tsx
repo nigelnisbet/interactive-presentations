@@ -69,7 +69,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({
       <div style={styles.header}>
         <h1 style={styles.title}>Activity Builder</h1>
         <p style={styles.subtitle}>
-          Create interactive activities for your slides.com presentations
+          Create interactive activities for your slides.com and Google Slides presentations
         </p>
       </div>
 

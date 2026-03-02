@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { ref, get } from 'firebase/database';
+import { ref, get, remove } from 'firebase/database';
 import { database } from './firebaseConfig';
 
 interface PresentationListItem {
@@ -47,6 +47,8 @@ export const PresentationPicker: React.FC<PresentationPickerProps> = ({ onSelect
   const [error, setError] = useState<string | null>(null);
   const [selectedTags, setSelectedTags] = useState<string[]>([]);
   const [allTags, setAllTags] = useState<string[]>([]);
+  const [deleteTarget, setDeleteTarget] = useState<PresentationListItem | null>(null);
+  const [deleting, setDeleting] = useState(false);
 
   useEffect(() => {
     loadPresentations();
@@ -114,6 +116,22 @@ export const PresentationPicker: React.FC<PresentationPickerProps> = ({ onSelect
         ? prev.filter(t => t !== tag)
         : [...prev, tag]
     );
+  };
+
+  const handleDeletePresentation = async () => {
+    if (!deleteTarget) return;
+
+    setDeleting(true);
+    try {
+      await remove(ref(database, `presentations/${deleteTarget.id}`));
+      setPresentations(prev => prev.filter(p => p.id !== deleteTarget.id));
+      setDeleteTarget(null);
+    } catch (err) {
+      console.error('Error deleting presentation:', err);
+      setError('Failed to delete presentation');
+    } finally {
+      setDeleting(false);
+    }
   };
 
   const filteredPresentations = presentations.filter(p => {
@@ -284,9 +302,55 @@ export const PresentationPicker: React.FC<PresentationPickerProps> = ({ onSelect
                     <line x1="10" y1="14" x2="21" y2="3" />
                   </svg>
                 </a>
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setDeleteTarget(presentation);
+                  }}
+                  style={styles.deleteBtn}
+                  title="Delete presentation"
+                >
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <polyline points="3 6 5 6 21 6" />
+                    <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+                    <line x1="10" y1="11" x2="10" y2="17" />
+                    <line x1="14" y1="11" x2="14" y2="17" />
+                  </svg>
+                </button>
               </div>
             );
           })}
+        </div>
+      )}
+
+      {/* Delete Confirmation Dialog */}
+      {deleteTarget && (
+        <div style={styles.dialogOverlay}>
+          <div style={styles.dialog}>
+            <h3 style={styles.dialogTitle}>Delete Presentation</h3>
+            <p style={styles.dialogText}>
+              Are you sure you want to delete <strong>{deleteTarget.title || deleteTarget.id}</strong>?
+            </p>
+            <p style={styles.dialogWarning}>
+              This will permanently remove all {deleteTarget.activityCount} {deleteTarget.activityCount === 1 ? 'activity' : 'activities'} associated with this presentation.
+            </p>
+            <div style={styles.dialogButtons}>
+              <button
+                onClick={() => setDeleteTarget(null)}
+                style={styles.dialogCancelBtn}
+                disabled={deleting}
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleDeletePresentation}
+                style={styles.dialogDeleteBtn}
+                disabled={deleting}
+              >
+                {deleting ? 'Deleting...' : 'Delete'}
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </div>
@@ -459,5 +523,81 @@ const styles: Record<string, React.CSSProperties> = {
     transition: 'background-color 0.2s',
     textDecoration: 'none',
     flexShrink: 0,
+  },
+  deleteBtn: {
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: '8px',
+    color: '#9ca3af',
+    backgroundColor: 'transparent',
+    border: 'none',
+    borderRadius: '4px',
+    cursor: 'pointer',
+    transition: 'color 0.2s',
+    flexShrink: 0,
+  },
+  dialogOverlay: {
+    position: 'fixed',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    zIndex: 1000,
+  },
+  dialog: {
+    backgroundColor: 'white',
+    borderRadius: '12px',
+    padding: '24px',
+    maxWidth: '400px',
+    width: '90%',
+    boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.1)',
+  },
+  dialogTitle: {
+    margin: '0 0 12px 0',
+    fontSize: '18px',
+    fontWeight: '600',
+    color: '#111827',
+  },
+  dialogText: {
+    margin: '0 0 8px 0',
+    fontSize: '14px',
+    color: '#374151',
+    lineHeight: '1.5',
+  },
+  dialogWarning: {
+    margin: '0 0 20px 0',
+    fontSize: '13px',
+    color: '#dc2626',
+    lineHeight: '1.5',
+  },
+  dialogButtons: {
+    display: 'flex',
+    gap: '12px',
+    justifyContent: 'flex-end',
+  },
+  dialogCancelBtn: {
+    padding: '8px 16px',
+    backgroundColor: '#f3f4f6',
+    color: '#374151',
+    border: 'none',
+    borderRadius: '6px',
+    cursor: 'pointer',
+    fontSize: '14px',
+    fontWeight: '500',
+  },
+  dialogDeleteBtn: {
+    padding: '8px 16px',
+    backgroundColor: '#dc2626',
+    color: 'white',
+    border: 'none',
+    borderRadius: '6px',
+    cursor: 'pointer',
+    fontSize: '14px',
+    fontWeight: '500',
   },
 };
