@@ -5,6 +5,8 @@ import { ActivityFormData } from './ActivityFormFields';
 
 interface SlideArrangerProps {
   presentationId: string;
+  presentationTitle: string;
+  onTitleChange: (title: string) => void;
   horizontalCount: number;
   verticalCounts: Map<number, number>; // indexh -> vertical slide count
   activities: ActivityFormData[];
@@ -20,6 +22,8 @@ interface SlideArrangerProps {
 
 export const SlideArranger: React.FC<SlideArrangerProps> = ({
   presentationId,
+  presentationTitle,
+  onTitleChange,
   horizontalCount,
   verticalCounts,
   activities,
@@ -32,6 +36,8 @@ export const SlideArranger: React.FC<SlideArrangerProps> = ({
   saving,
   hasChanges,
 }) => {
+  const [isEditingTitle, setIsEditingTitle] = useState(false);
+  const [editedTitle, setEditedTitle] = useState(presentationTitle);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const [isDragging, setIsDragging] = useState(false);
   const [startX, setStartX] = useState(0);
@@ -86,9 +92,46 @@ export const SlideArranger: React.FC<SlideArrangerProps> = ({
           <button onClick={onBack} style={styles.backBtn}>
             ← Back
           </button>
-          <h1 style={styles.title}>
-            {presentationId}
-          </h1>
+          <div style={styles.titleSection}>
+            {isEditingTitle ? (
+              <input
+                type="text"
+                value={editedTitle}
+                onChange={(e) => setEditedTitle(e.target.value)}
+                onBlur={() => {
+                  onTitleChange(editedTitle);
+                  setIsEditingTitle(false);
+                }}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    onTitleChange(editedTitle);
+                    setIsEditingTitle(false);
+                  } else if (e.key === 'Escape') {
+                    setEditedTitle(presentationTitle);
+                    setIsEditingTitle(false);
+                  }
+                }}
+                style={styles.titleInput}
+                placeholder="Enter presentation title..."
+                autoFocus
+              />
+            ) : (
+              <h1
+                style={styles.title}
+                onClick={() => {
+                  setEditedTitle(presentationTitle);
+                  setIsEditingTitle(true);
+                }}
+                title="Click to edit title"
+              >
+                {presentationTitle || presentationId}
+                <span style={styles.editIcon}>✏️</span>
+              </h1>
+            )}
+            {presentationTitle && (
+              <span style={styles.presentationIdSmall}>ID: {presentationId}</span>
+            )}
+          </div>
           <span style={styles.slideCount}>
             {horizontalCount} slides · {activities.length} activities
           </span>
@@ -179,10 +222,38 @@ const styles: Record<string, React.CSSProperties> = {
     cursor: 'pointer',
     fontSize: '14px',
   },
+  titleSection: {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '2px',
+  },
   title: {
     fontSize: '20px',
     fontWeight: '600',
     margin: 0,
+    cursor: 'pointer',
+    display: 'flex',
+    alignItems: 'center',
+    gap: '8px',
+  },
+  titleInput: {
+    fontSize: '20px',
+    fontWeight: '600',
+    backgroundColor: '#1a1a2e',
+    border: '1px solid #4b5563',
+    borderRadius: '4px',
+    color: 'white',
+    padding: '4px 8px',
+    width: '300px',
+  },
+  editIcon: {
+    fontSize: '14px',
+    opacity: 0.5,
+  },
+  presentationIdSmall: {
+    fontSize: '11px',
+    color: '#6b7280',
+    fontFamily: 'monospace',
   },
   slideCount: {
     fontSize: '14px',

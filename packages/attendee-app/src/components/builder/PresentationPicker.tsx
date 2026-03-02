@@ -4,6 +4,7 @@ import { database } from './firebaseConfig';
 
 interface PresentationListItem {
   id: string;
+  title: string;
   activityCount: number;
 }
 
@@ -33,10 +34,15 @@ export const PresentationPicker: React.FC<PresentationPickerProps> = ({ onSelect
         const data = snapshot.val();
         const list: PresentationListItem[] = Object.keys(data).map(id => ({
           id,
+          title: data[id].config?.title || '',
           activityCount: data[id].config?.activities?.length || 0,
         }));
-        // Sort by ID alphabetically
-        list.sort((a, b) => a.id.localeCompare(b.id));
+        // Sort by title first (if exists), then by ID
+        list.sort((a, b) => {
+          const aName = a.title || a.id;
+          const bName = b.title || b.id;
+          return aName.localeCompare(bName);
+        });
         setPresentations(list);
       } else {
         setPresentations([]);
@@ -50,7 +56,8 @@ export const PresentationPicker: React.FC<PresentationPickerProps> = ({ onSelect
   };
 
   const filteredPresentations = presentations.filter(p =>
-    p.id.toLowerCase().includes(searchQuery.toLowerCase())
+    p.id.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    p.title.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
   if (loading) {
@@ -103,7 +110,14 @@ export const PresentationPicker: React.FC<PresentationPickerProps> = ({ onSelect
                 onClick={() => onSelect(presentation.id)}
                 style={styles.listItemMain}
               >
-                <span style={styles.presentationId}>{presentation.id}</span>
+                <div style={styles.nameSection}>
+                  <span style={styles.presentationName}>
+                    {presentation.title || presentation.id}
+                  </span>
+                  {presentation.title && (
+                    <span style={styles.presentationIdSmall}>{presentation.id}</span>
+                  )}
+                </div>
                 <span style={styles.activityCount}>
                   {presentation.activityCount} {presentation.activityCount === 1 ? 'activity' : 'activities'}
                 </span>
@@ -203,9 +217,19 @@ const styles: Record<string, React.CSSProperties> = {
     alignItems: 'center',
     cursor: 'pointer',
   },
-  presentationId: {
+  nameSection: {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '2px',
+  },
+  presentationName: {
     fontWeight: '500',
     color: '#333',
+  },
+  presentationIdSmall: {
+    fontSize: '11px',
+    color: '#9ca3af',
+    fontFamily: 'monospace',
   },
   activityCount: {
     fontSize: '12px',

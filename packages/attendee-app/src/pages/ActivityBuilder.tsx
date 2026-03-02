@@ -17,6 +17,7 @@ export const ActivityBuilder: React.FC = () => {
 
   // Presentation state
   const [presentationId, setPresentationId] = useState('');
+  const [presentationTitle, setPresentationTitle] = useState('');
   const [horizontalCount, setHorizontalCount] = useState(0);
   const [verticalCounts, setVerticalCounts] = useState<Map<number, number>>(new Map());
   const [activities, setActivities] = useState<ActivityFormData[]>([]);
@@ -64,6 +65,8 @@ export const ActivityBuilder: React.FC = () => {
 
       if (snapshot.exists()) {
         const config = snapshot.val();
+        // Load title if it exists
+        setPresentationTitle(config.title || '');
         loadedActivities = (config.activities || []).map((act: any) => ({
           type: act.config?.type || act.activityType || 'poll',
           activityId: act.activityId,
@@ -109,6 +112,7 @@ export const ActivityBuilder: React.FC = () => {
     const structure = deriveSlideStructure([], slideCount);
 
     setPresentationId(id);
+    setPresentationTitle(''); // New presentations start with no title
     setActivities([]);
     setOriginalActivities([]);
     setHorizontalCount(structure.horizontal);
@@ -208,6 +212,7 @@ export const ActivityBuilder: React.FC = () => {
   const buildConfigJSON = useCallback(() => {
     return {
       presentationId,
+      title: presentationTitle,
       activities: activities.map(activity => {
         const base = {
           activityId: activity.activityId,
@@ -263,7 +268,7 @@ export const ActivityBuilder: React.FC = () => {
         }
       }),
     };
-  }, [presentationId, activities]);
+  }, [presentationId, presentationTitle, activities]);
 
   // Handle save to Firebase
   const handleSave = useCallback(async () => {
@@ -293,6 +298,7 @@ export const ActivityBuilder: React.FC = () => {
     }
     setView('landing');
     setPresentationId('');
+    setPresentationTitle('');
     setActivities([]);
     setOriginalActivities([]);
     setHorizontalCount(0);
@@ -343,6 +349,8 @@ export const ActivityBuilder: React.FC = () => {
       {view === 'arranger' && (
         <SlideArranger
           presentationId={presentationId}
+          presentationTitle={presentationTitle}
+          onTitleChange={setPresentationTitle}
           horizontalCount={horizontalCount}
           verticalCounts={verticalCounts}
           activities={activities}

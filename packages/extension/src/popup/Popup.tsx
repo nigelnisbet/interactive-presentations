@@ -182,6 +182,7 @@ const Popup: React.FC = () => {
       {sessionInfo.qrCode && (
         <div style={styles.qrSection}>
           <img src={sessionInfo.qrCode} alt="Session QR Code" style={styles.qrCode} />
+          <div style={styles.joinUrl}>presentations.stmath.com</div>
         </div>
       )}
 
@@ -344,6 +345,12 @@ const styles = {
   qrCode: {
     width: '200px',
     height: '200px',
+  },
+  joinUrl: {
+    marginTop: '12px',
+    fontSize: '14px',
+    fontWeight: 600,
+    color: '#007bff',
   },
   stats: {
     display: 'flex',
