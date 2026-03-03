@@ -21,6 +21,19 @@ const Popup: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [isOnSlidesPage, setIsOnSlidesPage] = useState(false);
 
+  // Auto-resize popup to fit content
+  useEffect(() => {
+    const resizePopup = () => {
+      const root = document.getElementById('root');
+      if (root) {
+        document.body.style.height = `${root.scrollHeight}px`;
+      }
+    };
+    // Resize after render and on any state change
+    setTimeout(resizePopup, 0);
+    resizePopup();
+  });
+
   useEffect(() => {
     // Check if we're on a slides.com page
     chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
@@ -226,6 +239,7 @@ const styles = {
   container: {
     padding: '20px',
     backgroundColor: '#f8f9fa',
+    minHeight: 'fit-content',
   },
   title: {
     margin: '0 0 16px 0',

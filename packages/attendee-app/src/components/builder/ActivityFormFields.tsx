@@ -1,6 +1,7 @@
 import React from 'react';
+import { ReviewGameQuestionEditor, ReviewGameQuestionData } from './ReviewGameQuestionEditor';
 
-export type ActivityType = 'poll' | 'quiz' | 'web-link' | 'text-response';
+export type ActivityType = 'poll' | 'quiz' | 'web-link' | 'text-response' | 'review-game';
 
 export type ActivityFormData = {
   type: ActivityType;
@@ -27,7 +28,16 @@ export type ActivityFormData = {
   prompt?: string;
   placeholder?: string;
   maxLength?: number;
+
+  // Review-game specific
+  gameTitle?: string;
+  gameQuestions?: ReviewGameQuestionData[];
+  defaultTimeLimit?: number;
+  maxPoints?: number;
+  minPoints?: number;
 };
+
+const generateQuestionId = () => `q-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`;
 
 export const getDefaultActivity = (type: ActivityType = 'poll', indexh = 0, indexv = 0): ActivityFormData => {
   if (type === 'web-link') {
@@ -50,6 +60,23 @@ export const getDefaultActivity = (type: ActivityType = 'poll', indexh = 0, inde
       prompt: '',
       placeholder: 'Type your response here...',
       maxLength: 500,
+    };
+  }
+  if (type === 'review-game') {
+    return {
+      type,
+      activityId: '',
+      slidePosition: { indexh, indexv },
+      gameTitle: '',
+      gameQuestions: Array.from({ length: 5 }, () => ({
+        id: generateQuestionId(),
+        question: '',
+        options: ['', '', '', ''],
+        correctAnswer: 0,
+      })),
+      defaultTimeLimit: 20,
+      maxPoints: 1000,
+      minPoints: 100,
     };
   }
   return {
@@ -89,6 +116,22 @@ export const validateActivity = (activity: ActivityFormData): string | null => {
     }
   } else if (activity.type === 'text-response') {
     if (!activity.prompt?.trim()) return 'Prompt/question is required';
+  } else if (activity.type === 'review-game') {
+    if (!activity.gameTitle?.trim()) return 'Game title is required';
+    if (!activity.gameQuestions?.length) return 'At least one question is required';
+    for (let i = 0; i < activity.gameQuestions.length; i++) {
+      const q = activity.gameQuestions[i];
+      if (!q.question?.trim()) return `Question ${i + 1}: Question text is required`;
+      if (!q.options?.length || q.options.length < 2) {
+        return `Question ${i + 1}: At least 2 options are required`;
+      }
+      if (q.options.some(opt => !opt.trim())) {
+        return `Question ${i + 1}: All options must have text`;
+      }
+      if (q.correctAnswer === undefined || q.correctAnswer < 0 || q.correctAnswer >= q.options.length) {
+        return `Question ${i + 1}: Valid correct answer must be selected`;
+      }
+    }
   }
 
   return null;
@@ -148,6 +191,7 @@ export const ActivityFormFields: React.FC<ActivityFormFieldsProps> = ({
         >
           <option value="poll">Poll (Multiple Choice)</option>
           <option value="quiz">Quiz (With Correct Answer)</option>
+          <option value="review-game">Review Game (Multi-Question Competition)</option>
           <option value="text-response">Open-Ended Text Response</option>
           <option value="web-link">Web Link / ST Math Game</option>
         </select>
@@ -312,6 +356,53 @@ export const ActivityFormFields: React.FC<ActivityFormFieldsProps> = ({
               style={styles.input}
             />
           </label>
+        </>
+      )}
+
+      {/* Review Game Fields */}
+      {activity.type === 'review-game' && (
+        <>
+          <label style={styles.label}>
+            Game Title
+            <input
+              type="text"
+              value={activity.gameTitle || ''}
+              onChange={(e) => onChange({ ...activity, gameTitle: e.target.value })}
+              placeholder="e.g., Chapter 5 Review"
+              style={styles.input}
+            />
+          </label>
+
+          <div style={styles.row}>
+            <label style={styles.label}>
+              Time Per Question (seconds)
+              <input
+                type="number"
+                value={activity.defaultTimeLimit || 20}
+                onChange={(e) => onChange({ ...activity, defaultTimeLimit: parseInt(e.target.value) || 20 })}
+                min="5"
+                max="120"
+                style={styles.input}
+              />
+            </label>
+            <label style={styles.label}>
+              Max Points Per Question
+              <input
+                type="number"
+                value={activity.maxPoints || 1000}
+                onChange={(e) => onChange({ ...activity, maxPoints: parseInt(e.target.value) || 1000 })}
+                min="100"
+                max="10000"
+                style={styles.input}
+              />
+            </label>
+          </div>
+
+          <ReviewGameQuestionEditor
+            questions={activity.gameQuestions || []}
+            onChange={(questions) => onChange({ ...activity, gameQuestions: questions })}
+            defaultTimeLimit={activity.defaultTimeLimit || 20}
+          />
         </>
       )}
 

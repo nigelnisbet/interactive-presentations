@@ -7,9 +7,29 @@ import {
   ActivityFormData,
   getDefaultActivity,
   database,
+  AuthProvider,
+  useAuth,
+  LoginScreen,
+  SettingsPanel,
+  ActivityLibrary,
 } from '../components/builder';
 
-type ViewState = 'landing' | 'arranger';
+type ViewState = 'landing' | 'arranger' | 'library';
+
+// Detect source platform from presentation ID
+type PresentationSource = 'google-slides' | 'slides-com' | 'unknown';
+
+const detectSource = (id: string): PresentationSource => {
+  // Google Slides IDs are typically 44 characters, alphanumeric with dashes/underscores
+  if (id.length >= 40 && /^[a-zA-Z0-9_-]+$/.test(id)) {
+    return 'google-slides';
+  }
+  // slides.com IDs are shorter slugs
+  if (id.length < 40) {
+    return 'slides-com';
+  }
+  return 'unknown';
+};
 
 // URL parsing helper (extracts presentation ID from Google Slides or slides.com URLs)
 const parsePresentationUrl = (url: string): string => {
@@ -27,14 +47,16 @@ const parsePresentationUrl = (url: string): string => {
 
 // Copy Presentation Dialog
 interface CopyDialogProps {
-  onCopy: (targetId: string) => void;
+  onCopy: (targetId: string, newTitle: string) => void;
   onClose: () => void;
   saving: boolean;
+  currentTitle: string;
 }
 
-const CopyPresentationDialog: React.FC<CopyDialogProps> = ({ onCopy, onClose, saving }) => {
+const CopyPresentationDialog: React.FC<CopyDialogProps> = ({ onCopy, onClose, saving, currentTitle }) => {
   const [url, setUrl] = useState('');
   const [parsedId, setParsedId] = useState('');
+  const [newTitle, setNewTitle] = useState(currentTitle ? `${currentTitle} (Copy)` : '');
 
   const handleUrlChange = (value: string) => {
     setUrl(value);
@@ -65,16 +87,30 @@ const CopyPresentationDialog: React.FC<CopyDialogProps> = ({ onCopy, onClose, sa
             Presentation ID: <strong>{parsedId}</strong>
           </div>
         )}
+        {parsedId && (
+          <div style={{ marginTop: '16px' }}>
+            <label style={{ display: 'block', fontSize: '13px', fontWeight: '500', color: '#374151', marginBottom: '6px' }}>
+              Title for the new copy:
+            </label>
+            <input
+              type="text"
+              value={newTitle}
+              onChange={e => setNewTitle(e.target.value)}
+              placeholder="Enter a title for the copy..."
+              style={dialogStyles.input}
+            />
+          </div>
+        )}
         <div style={dialogStyles.buttons}>
           <button onClick={onClose} style={dialogStyles.cancelBtn} disabled={saving}>
             Cancel
           </button>
           <button
-            onClick={() => onCopy(parsedId)}
+            onClick={() => onCopy(parsedId, newTitle)}
             style={dialogStyles.primaryBtn}
             disabled={!parsedId || saving}
           >
-            {saving ? 'Copying...' : 'Copy Activities'}
+            {saving ? 'Copying...' : 'Copy & Open'}
           </button>
         </div>
       </div>
@@ -134,6 +170,92 @@ const RepointPresentationDialog: React.FC<RepointDialogProps> = ({ currentId, on
             disabled={!parsedId || saving}
           >
             {saving ? 'Moving...' : 'Move Activities'}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+// Transfer Ownership Dialog
+interface TransferDialogProps {
+  presentationTitle: string;
+  onTransfer: (newOwnerId: string) => void;
+  onClose: () => void;
+  saving: boolean;
+}
+
+const TransferOwnershipDialog: React.FC<TransferDialogProps> = ({ presentationTitle, onTransfer, onClose, saving }) => {
+  const [targetUser, setTargetUser] = useState('');
+
+  // Predefined users for easy selection
+  const knownUsers = [
+    { id: 'nigel-nisbet', name: 'Nigel Nisbet' },
+    { id: 'pl', name: 'PL' },
+  ];
+
+  return (
+    <div style={dialogStyles.overlay} onClick={onClose}>
+      <div style={dialogStyles.modal} onClick={e => e.stopPropagation()}>
+        <h3 style={dialogStyles.title}>Transfer Ownership</h3>
+        <p style={dialogStyles.description}>
+          Transfer <strong>{presentationTitle || 'this presentation'}</strong> to another user.
+          After transfer, you will no longer see it in your list.
+        </p>
+
+        <div style={{ marginBottom: '16px' }}>
+          <label style={{ display: 'block', fontSize: '13px', fontWeight: '500', color: '#374151', marginBottom: '8px' }}>
+            Select user:
+          </label>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+            {knownUsers.map(user => (
+              <button
+                key={user.id}
+                onClick={() => setTargetUser(user.id)}
+                style={{
+                  padding: '12px 16px',
+                  fontSize: '14px',
+                  textAlign: 'left',
+                  backgroundColor: targetUser === user.id ? '#3b82f6' : '#f3f4f6',
+                  color: targetUser === user.id ? 'white' : '#374151',
+                  border: targetUser === user.id ? '2px solid #3b82f6' : '2px solid transparent',
+                  borderRadius: '8px',
+                  cursor: 'pointer',
+                  transition: 'all 0.15s',
+                }}
+              >
+                {user.name}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        <div style={{ marginBottom: '16px' }}>
+          <label style={{ display: 'block', fontSize: '13px', fontWeight: '500', color: '#374151', marginBottom: '8px' }}>
+            Or enter user ID manually:
+          </label>
+          <input
+            type="text"
+            value={targetUser}
+            onChange={e => setTargetUser(e.target.value.toLowerCase().replace(/\s+/g, '-'))}
+            placeholder="e.g., john-doe"
+            style={dialogStyles.input}
+          />
+        </div>
+
+        <div style={dialogStyles.buttons}>
+          <button onClick={onClose} style={dialogStyles.cancelBtn} disabled={saving}>
+            Cancel
+          </button>
+          <button
+            onClick={() => onTransfer(targetUser)}
+            style={{
+              ...dialogStyles.primaryBtn,
+              backgroundColor: '#f59e0b',
+            }}
+            disabled={!targetUser || saving}
+          >
+            {saving ? 'Transferring...' : 'Transfer Ownership'}
           </button>
         </div>
       </div>
@@ -217,7 +339,11 @@ const dialogStyles: Record<string, React.CSSProperties> = {
   },
 };
 
-export const ActivityBuilder: React.FC = () => {
+// Inner component that uses authentication
+const ActivityBuilderInner: React.FC = () => {
+  const { user, loading: authLoading } = useAuth();
+  const [showSettings, setShowSettings] = useState(false);
+
   // View state
   const [view, setView] = useState<ViewState>('landing');
 
@@ -229,6 +355,8 @@ export const ActivityBuilder: React.FC = () => {
   const [verticalCounts, setVerticalCounts] = useState<Map<number, number>>(new Map());
   const [activities, setActivities] = useState<ActivityFormData[]>([]);
   const [originalActivities, setOriginalActivities] = useState<ActivityFormData[]>([]);
+  const [originalHorizontalCount, setOriginalHorizontalCount] = useState(0);
+  const [originalVerticalCounts, setOriginalVerticalCounts] = useState<Map<number, number>>(new Map());
 
   // UI state
   const [loading, setLoading] = useState(false);
@@ -247,6 +375,7 @@ export const ActivityBuilder: React.FC = () => {
   // Dialog state
   const [showCopyDialog, setShowCopyDialog] = useState(false);
   const [showRepointDialog, setShowRepointDialog] = useState(false);
+  const [showTransferDialog, setShowTransferDialog] = useState(false);
 
   // Helper functions for slide keys
   const slideKey = (h: number, v: number) => `${h}-${v}`;
@@ -310,6 +439,15 @@ export const ActivityBuilder: React.FC = () => {
           prompt: act.config?.prompt,
           placeholder: act.config?.placeholder,
           maxLength: act.config?.maxLength,
+          // Review-game fields
+          gameTitle: act.config?.title,
+          gameQuestions: act.config?.questions,
+          defaultTimeLimit: act.config?.defaultTimeLimit,
+          maxPoints: act.config?.maxPoints,
+          minPoints: act.config?.minPoints,
+          // Library tracking fields
+          sourceLibraryId: act.sourceLibraryId,
+          copiedFromLibraryAt: act.copiedFromLibraryAt,
         }));
       }
 
@@ -320,6 +458,8 @@ export const ActivityBuilder: React.FC = () => {
       setOriginalActivities(JSON.parse(JSON.stringify(loadedActivities)));
       setHorizontalCount(structure.horizontal);
       setVerticalCounts(structure.vertical);
+      setOriginalHorizontalCount(structure.horizontal);
+      setOriginalVerticalCounts(new Map(structure.vertical));
       setView('arranger');
 
       if (loadedActivities.length > 0) {
@@ -343,6 +483,8 @@ export const ActivityBuilder: React.FC = () => {
     setOriginalActivities([]);
     setHorizontalCount(structure.horizontal);
     setVerticalCounts(structure.vertical);
+    setOriginalHorizontalCount(structure.horizontal);
+    setOriginalVerticalCounts(new Map(structure.vertical));
     setView('arranger');
     setMessage({ type: 'success', text: `Created new presentation with ${slideCount} slides` });
   }, [deriveSlideStructure]);
@@ -416,6 +558,95 @@ export const ActivityBuilder: React.FC = () => {
     newCounts.set(indexh, current + 1);
     setVerticalCounts(newCounts);
   }, [verticalCounts]);
+
+  // Handle delete slide (called from thumbnail trash icon)
+  // This removes the activity AND the slide itself (shifting subsequent slides)
+  const handleDeleteSlide = useCallback((indexh: number, indexv: number) => {
+    // Calculate total slides
+    let totalSlides = 0;
+    for (let h = 0; h < horizontalCount; h++) {
+      totalSlides += verticalCounts.get(h) || 1;
+    }
+
+    // Prevent deleting the last slide
+    if (totalSlides <= 1) {
+      return;
+    }
+
+    const vCount = verticalCounts.get(indexh) || 1;
+
+    if (indexv === 0 && vCount === 1) {
+      // Deleting the only slide in a column - remove the entire column
+      // Remove any activity at this position
+      const newActivities = activities.filter(
+        a => !(a.slidePosition.indexh === indexh && a.slidePosition.indexv === indexv)
+      );
+
+      // Shift all activities from columns to the right
+      const shiftedActivities = newActivities.map(a => {
+        if (a.slidePosition.indexh > indexh) {
+          return {
+            ...a,
+            slidePosition: {
+              indexh: a.slidePosition.indexh - 1,
+              indexv: a.slidePosition.indexv,
+            }
+          };
+        }
+        return a;
+      });
+
+      // Update vertical counts - shift all columns after indexh
+      const newVerticalCounts = new Map<number, number>();
+      for (let h = 0; h < horizontalCount; h++) {
+        if (h < indexh) {
+          newVerticalCounts.set(h, verticalCounts.get(h) || 1);
+        } else if (h > indexh) {
+          newVerticalCounts.set(h - 1, verticalCounts.get(h) || 1);
+        }
+        // Skip h === indexh (the deleted column)
+      }
+
+      setActivities(shiftedActivities);
+      setHorizontalCount(horizontalCount - 1);
+      setVerticalCounts(newVerticalCounts);
+    } else {
+      // Deleting a vertical sub-slide - just remove that slide and shift others in the column
+      // Remove the activity at this position
+      const newActivities = activities.filter(
+        a => !(a.slidePosition.indexh === indexh && a.slidePosition.indexv === indexv)
+      );
+
+      // Shift activities below this one up
+      const shiftedActivities = newActivities.map(a => {
+        if (a.slidePosition.indexh === indexh && a.slidePosition.indexv > indexv) {
+          return {
+            ...a,
+            slidePosition: {
+              indexh: a.slidePosition.indexh,
+              indexv: a.slidePosition.indexv - 1,
+            }
+          };
+        }
+        return a;
+      });
+
+      // Update vertical count for this column
+      const newVerticalCounts = new Map(verticalCounts);
+      newVerticalCounts.set(indexh, vCount - 1);
+
+      setActivities(shiftedActivities);
+      setVerticalCounts(newVerticalCounts);
+    }
+
+    // Clear selection if the deleted slide was selected
+    const deletedKey = slideKey(indexh, indexv);
+    if (selectedSlides.has(deletedKey)) {
+      const newSelection = new Set(selectedSlides);
+      newSelection.delete(deletedKey);
+      setSelectedSlides(newSelection);
+    }
+  }, [activities, horizontalCount, verticalCounts, selectedSlides]);
 
   // Get the editing slide position (first selected slide)
   const getEditingSlidePosition = useCallback(() => {
@@ -566,18 +797,28 @@ export const ActivityBuilder: React.FC = () => {
   }, [draggedSlide, selectedSlides]);
 
   // Copy presentation handler
-  const handleCopyPresentation = useCallback(async (targetId: string) => {
+  const handleCopyPresentation = useCallback(async (targetId: string, newTitle: string) => {
     setSaving(true);
     setMessage(null);
 
     try {
+      // Generate new activity IDs for the copy
+      const copiedActivities = activities.map(activity => {
+        const newActivityId = `${activity.type}-slide${activity.slidePosition.indexh}-${Date.now().toString(36)}`;
+        return {
+          ...activity,
+          activityId: newActivityId,
+        };
+      });
+
       const config = {
         presentationId: targetId,
-        title: presentationTitle ? `${presentationTitle} (Copy)` : '',
+        title: newTitle,
         tags: presentationTags,
-        activities: activities.map(activity => {
+        ownerId: user?.id,
+        activities: copiedActivities.map(activity => {
           const base = {
-            activityId: `${activity.activityId}-copy-${Date.now().toString(36)}`,
+            activityId: activity.activityId,
             slidePosition: activity.slidePosition,
             activityType: activity.type,
           };
@@ -597,14 +838,26 @@ export const ActivityBuilder: React.FC = () => {
       const configRef = ref(database, `presentations/${targetId}/config`);
       await set(configRef, config);
 
-      setMessage({ type: 'success', text: `Copied ${activities.length} activities to ${targetId}!` });
+      setMessage({ type: 'success', text: `Copied! Opening ${newTitle || targetId}...` });
       setShowCopyDialog(false);
+
+      // Navigate to the new copy
+      setTimeout(() => {
+        // Update state to reflect the new presentation
+        setPresentationId(targetId);
+        setPresentationTitle(newTitle);
+        setActivities(copiedActivities);
+        setOriginalActivities(JSON.parse(JSON.stringify(copiedActivities)));
+        // Keep the same slide structure
+        setOriginalHorizontalCount(horizontalCount);
+        setOriginalVerticalCounts(new Map(verticalCounts));
+      }, 500);
     } catch (error) {
       setMessage({ type: 'error', text: `Copy failed: ${(error as Error).message}` });
     } finally {
       setSaving(false);
     }
-  }, [activities, presentationTitle, presentationTags]);
+  }, [activities, presentationTags, user, horizontalCount, verticalCounts]);
 
   // Build config JSON
   const buildConfigJSON = useCallback(() => {
@@ -612,12 +865,21 @@ export const ActivityBuilder: React.FC = () => {
       presentationId,
       title: presentationTitle,
       tags: presentationTags,
+      ownerId: user?.id,
       activities: activities.map(activity => {
-        const base = {
+        const base: any = {
           activityId: activity.activityId,
           slidePosition: activity.slidePosition,
           activityType: activity.type,
         };
+
+        // Preserve library tracking fields
+        if ((activity as any).sourceLibraryId) {
+          base.sourceLibraryId = (activity as any).sourceLibraryId;
+        }
+        if ((activity as any).copiedFromLibraryAt) {
+          base.copiedFromLibraryAt = (activity as any).copiedFromLibraryAt;
+        }
 
         if (activity.type === 'poll') {
           return {
@@ -652,6 +914,18 @@ export const ActivityBuilder: React.FC = () => {
               maxLength: activity.maxLength,
             },
           };
+        } else if (activity.type === 'review-game') {
+          return {
+            ...base,
+            config: {
+              type: 'review-game',
+              title: (activity as any).gameTitle,
+              questions: (activity as any).gameQuestions,
+              defaultTimeLimit: (activity as any).defaultTimeLimit || 20,
+              maxPoints: (activity as any).maxPoints || 1000,
+              minPoints: (activity as any).minPoints || 100,
+            },
+          };
         } else {
           return {
             ...base,
@@ -667,7 +941,7 @@ export const ActivityBuilder: React.FC = () => {
         }
       }),
     };
-  }, [presentationId, presentationTitle, presentationTags, activities]);
+  }, [presentationId, presentationTitle, presentationTags, activities, user]);
 
   // Re-point presentation handler
   const handleRepointPresentation = useCallback(async (newId: string) => {
@@ -687,6 +961,8 @@ export const ActivityBuilder: React.FC = () => {
 
       setPresentationId(newId);
       setOriginalActivities(JSON.parse(JSON.stringify(activities)));
+      setOriginalHorizontalCount(horizontalCount);
+      setOriginalVerticalCounts(new Map(verticalCounts));
 
       setMessage({ type: 'success', text: `Moved to ${newId}!` });
       setShowRepointDialog(false);
@@ -696,6 +972,39 @@ export const ActivityBuilder: React.FC = () => {
       setSaving(false);
     }
   }, [presentationId, activities, buildConfigJSON]);
+
+  // Transfer ownership handler
+  const handleTransferOwnership = useCallback(async (newOwnerId: string) => {
+    setSaving(true);
+    setMessage(null);
+
+    try {
+      // Update just the ownerId in Firebase
+      const ownerRef = ref(database, `presentations/${presentationId}/config/ownerId`);
+      await set(ownerRef, newOwnerId);
+
+      setMessage({ type: 'success', text: `Transferred to ${newOwnerId}! Returning to list...` });
+      setShowTransferDialog(false);
+
+      // After a brief delay, go back to landing (since user no longer owns this)
+      setTimeout(() => {
+        setView('landing');
+        setPresentationId('');
+        setPresentationTitle('');
+        setPresentationTags([]);
+        setActivities([]);
+        setOriginalActivities([]);
+        setHorizontalCount(0);
+        setVerticalCounts(new Map());
+        setOriginalHorizontalCount(0);
+        setOriginalVerticalCounts(new Map());
+      }, 1500);
+    } catch (error) {
+      setMessage({ type: 'error', text: `Transfer failed: ${(error as Error).message}` });
+    } finally {
+      setSaving(false);
+    }
+  }, [presentationId]);
 
   // Handle save to Firebase
   const handleSave = useCallback(async () => {
@@ -707,6 +1016,8 @@ export const ActivityBuilder: React.FC = () => {
       const configRef = ref(database, `presentations/${presentationId}/config`);
       await set(configRef, config);
       setOriginalActivities(JSON.parse(JSON.stringify(activities)));
+      setOriginalHorizontalCount(horizontalCount);
+      setOriginalVerticalCounts(new Map(verticalCounts));
       setMessage({ type: 'success', text: `Saved ${activities.length} activities!` });
     } catch (error) {
       setMessage({ type: 'error', text: `Failed to save: ${(error as Error).message}` });
@@ -717,8 +1028,10 @@ export const ActivityBuilder: React.FC = () => {
 
   // Handle back to landing
   const handleBack = useCallback(() => {
-    const hasChanges = JSON.stringify(activities) !== JSON.stringify(originalActivities);
-    if (hasChanges) {
+    const activitiesChanged = JSON.stringify(activities) !== JSON.stringify(originalActivities);
+    const structureChanged = horizontalCount !== originalHorizontalCount ||
+      JSON.stringify(Array.from(verticalCounts.entries())) !== JSON.stringify(Array.from(originalVerticalCounts.entries()));
+    if (activitiesChanged || structureChanged) {
       if (!confirm('You have unsaved changes. Are you sure you want to go back?')) {
         return;
       }
@@ -731,11 +1044,16 @@ export const ActivityBuilder: React.FC = () => {
     setOriginalActivities([]);
     setHorizontalCount(0);
     setVerticalCounts(new Map());
+    setOriginalHorizontalCount(0);
+    setOriginalVerticalCounts(new Map());
     setMessage(null);
-  }, [activities, originalActivities]);
+  }, [activities, originalActivities, horizontalCount, originalHorizontalCount, verticalCounts, originalVerticalCounts]);
 
-  // Check if there are unsaved changes
-  const hasChanges = JSON.stringify(activities) !== JSON.stringify(originalActivities);
+  // Check if there are unsaved changes (activities or slide structure)
+  const hasActivitiesChanged = JSON.stringify(activities) !== JSON.stringify(originalActivities);
+  const hasStructureChanged = horizontalCount !== originalHorizontalCount ||
+    JSON.stringify(Array.from(verticalCounts.entries())) !== JSON.stringify(Array.from(originalVerticalCounts.entries()));
+  const hasChanges = hasActivitiesChanged || hasStructureChanged;
 
   // Clear message after 5 seconds
   React.useEffect(() => {
@@ -745,8 +1063,31 @@ export const ActivityBuilder: React.FC = () => {
     }
   }, [message]);
 
+  // Show loading while checking auth
+  if (authLoading) {
+    return (
+      <div style={{
+        minHeight: '100vh',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        backgroundColor: '#f5f5f5',
+      }}>
+        <div style={{ color: '#666' }}>Loading...</div>
+      </div>
+    );
+  }
+
+  // Show login if not authenticated
+  if (!user) {
+    return <LoginScreen />;
+  }
+
   return (
     <>
+      {/* Settings Panel */}
+      {showSettings && <SettingsPanel onClose={() => setShowSettings(false)} />}
+
       {/* Toast Message */}
       {message && (
         <div style={{
@@ -766,11 +1107,55 @@ export const ActivityBuilder: React.FC = () => {
         </div>
       )}
 
+      {/* User bar - shown only on landing view (arranger has its own in header) */}
+      {view === 'landing' && (
+        <div style={{
+          position: 'fixed',
+          top: '12px',
+          right: '12px',
+          display: 'flex',
+          alignItems: 'center',
+          gap: '8px',
+          zIndex: 1000,
+        }}>
+          <span style={{
+            fontSize: '13px',
+            color: '#666',
+          }}>
+            {user.name}
+          </span>
+          <button
+            onClick={() => setShowSettings(true)}
+            style={{
+              padding: '6px 12px',
+              fontSize: '12px',
+              color: '#666',
+              backgroundColor: 'white',
+              border: '1px solid #ddd',
+              borderRadius: '6px',
+              cursor: 'pointer',
+            }}
+          >
+            Settings
+          </button>
+        </div>
+      )}
+
       {view === 'landing' && (
         <LandingPage
           onLoadPresentation={handleLoadPresentation}
           onCreateNew={handleCreateNew}
+          onOpenLibrary={() => setView('library')}
           loading={loading}
+          currentUserId={user.id}
+        />
+      )}
+
+      {view === 'library' && (
+        <ActivityLibrary
+          currentUserId={user.id}
+          onBack={() => setView('landing')}
+          mode="browse"
         />
       )}
 
@@ -778,6 +1163,7 @@ export const ActivityBuilder: React.FC = () => {
         <SlideArranger
           presentationId={presentationId}
           presentationTitle={presentationTitle}
+          presentationSource={detectSource(presentationId)}
           onTitleChange={setPresentationTitle}
           tags={presentationTags}
           onTagsChange={setPresentationTags}
@@ -789,6 +1175,7 @@ export const ActivityBuilder: React.FC = () => {
           onSlideDoubleClick={handleSlideDoubleClick}
           onAddHorizontal={handleAddHorizontal}
           onAddVertical={handleAddVertical}
+          onDeleteSlide={handleDeleteSlide}
           onSave={handleSave}
           onBack={handleBack}
           saving={saving}
@@ -800,9 +1187,13 @@ export const ActivityBuilder: React.FC = () => {
           onDragEnd={handleDragEnd}
           onDragOver={handleDragOver}
           onDrop={handleDrop}
-          // Copy/repoint props
+          // Copy/repoint/transfer props
           onShowCopyDialog={() => setShowCopyDialog(true)}
           onShowRepointDialog={() => setShowRepointDialog(true)}
+          onShowTransferDialog={() => setShowTransferDialog(true)}
+          // User info
+          userName={user.name}
+          onShowSettings={() => setShowSettings(true)}
         />
       )}
 
@@ -815,6 +1206,7 @@ export const ActivityBuilder: React.FC = () => {
         onSave={handleSaveActivity}
         onDelete={handleDeleteActivity}
         onClose={handleCloseModal}
+        currentUserId={user.id}
       />
 
       {/* Copy Presentation Dialog */}
@@ -823,6 +1215,7 @@ export const ActivityBuilder: React.FC = () => {
           onCopy={handleCopyPresentation}
           onClose={() => setShowCopyDialog(false)}
           saving={saving}
+          currentTitle={presentationTitle}
         />
       )}
 
@@ -835,6 +1228,25 @@ export const ActivityBuilder: React.FC = () => {
           saving={saving}
         />
       )}
+
+      {/* Transfer Ownership Dialog */}
+      {showTransferDialog && (
+        <TransferOwnershipDialog
+          presentationTitle={presentationTitle}
+          onTransfer={handleTransferOwnership}
+          onClose={() => setShowTransferDialog(false)}
+          saving={saving}
+        />
+      )}
     </>
+  );
+};
+
+// Main export - wraps with AuthProvider
+export const ActivityBuilder: React.FC = () => {
+  return (
+    <AuthProvider>
+      <ActivityBuilderInner />
+    </AuthProvider>
   );
 };

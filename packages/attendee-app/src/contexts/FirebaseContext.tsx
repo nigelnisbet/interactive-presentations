@@ -5,7 +5,7 @@
  * Firebase Realtime Database instead of Socket.IO for real-time sync.
  */
 
-import React, { createContext, useContext, useEffect, useState, useCallback, ReactNode } from 'react';
+import React, { createContext, useContext, useEffect, useState, useCallback, useRef, ReactNode } from 'react';
 import { initializeApp } from 'firebase/app';
 import {
   getDatabase,
@@ -25,6 +25,8 @@ import {
   ActivityResults,
   PollActivity,
   QuizActivity,
+  ReviewGamePhase,
+  ReviewGameLeaderboardEntry,
 } from '@interactive-presentations/shared';
 
 // Firebase configuration - same project as trillionaire
@@ -42,6 +44,13 @@ const firebaseConfig = {
 const app = initializeApp(firebaseConfig);
 const database = getDatabase(app);
 
+interface ReviewGameState {
+  gamePhase: ReviewGamePhase;
+  currentQuestionIndex: number;
+  questionStartTime: number;
+  responseCount?: number;  // Number of responses for current question
+}
+
 interface FirebaseContextType {
   connected: boolean;
   joinSession: (sessionCode: string, name?: string) => Promise<AttendeeJoinedPayload>;
@@ -51,6 +60,17 @@ interface FirebaseContextType {
   error: string | null;
   participantCount: number;
   leaveSession: () => void;
+  // Review game methods
+  participantId: string | null;
+  participantName: string | null;
+  joinReviewGame?: (activityId: string, name: string) => Promise<void>;
+  submitReviewGameAnswer?: (activityId: string, questionId: string, answer: number, answerTime: number) => Promise<{ isCorrect: boolean; points: number } | null>;
+  getReviewGameState?: (activityId: string, callback: (state: ReviewGameState | null, leaderboard: ReviewGameLeaderboardEntry[] | null, reviewGameParticipantCount?: number) => void) => Unsubscribe;
+  // Presenter controls for review game
+  startReviewGame?: (activityId: string) => Promise<void>;
+  revealAnswer?: (activityId: string) => Promise<void>;
+  nextQuestion?: (activityId: string, totalQuestions: number) => Promise<void>;
+  endReviewGame?: (activityId: string) => Promise<void>;
 }
 
 const FirebaseContext = createContext<FirebaseContextType | undefined>(undefined);
@@ -59,6 +79,9 @@ export const FirebaseProvider: React.FC<{ children: ReactNode }> = ({ children }
   const [connected, setConnected] = useState(false);
   const [sessionCode, setSessionCode] = useState<string | null>(null);
   const [participantId, setParticipantId] = useState<string | null>(null);
+  const [participantName, setParticipantName] = useState<string | null>(
+    sessionStorage.getItem('attendeeName')
+  );
   const [currentActivity, setCurrentActivity] = useState<ActivityDefinition | null>(null);
   const [currentResults, setCurrentResults] = useState<ActivityResults | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -147,7 +170,11 @@ export const FirebaseProvider: React.FC<{ children: ReactNode }> = ({ children }
     };
   }, [sessionCode]);
 
-  // Listen to aggregated results for current activity
+  // Listen to aggregated results for current activity (debounced for large sessions)
+  const pendingResultsRef = useRef<any>(null);
+  const debounceTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const DEBOUNCE_MS = 500; // Update UI at most every 500ms during high-traffic periods
+
   useEffect(() => {
     if (!sessionCode || !currentActivity?.activityId) return;
 
@@ -155,19 +182,45 @@ export const FirebaseProvider: React.FC<{ children: ReactNode }> = ({ children }
     const unsubscribe = onValue(resultsRef, (snapshot) => {
       const results = snapshot.val();
       if (results) {
-        console.log('Results updated:', results);
-        // Enrich results with activity info for display
-        const enrichedResults = {
-          ...results,
-          activityId: currentActivity.activityId,
-          question: (currentActivity as PollActivity | QuizActivity).question,
-          options: (currentActivity as PollActivity | QuizActivity).options,
-        };
-        setCurrentResults(enrichedResults);
+        // Store the latest results
+        pendingResultsRef.current = results;
+
+        // If no timer is running, update immediately and start debounce
+        if (!debounceTimerRef.current) {
+          const enrichedResults = {
+            ...results,
+            activityId: currentActivity.activityId,
+            question: (currentActivity as PollActivity | QuizActivity).question,
+            options: (currentActivity as PollActivity | QuizActivity).options,
+          };
+          setCurrentResults(enrichedResults);
+
+          // Start debounce timer for subsequent rapid updates
+          debounceTimerRef.current = setTimeout(() => {
+            // Apply any pending results that came in during debounce period
+            if (pendingResultsRef.current) {
+              const latestResults = {
+                ...pendingResultsRef.current,
+                activityId: currentActivity.activityId,
+                question: (currentActivity as PollActivity | QuizActivity).question,
+                options: (currentActivity as PollActivity | QuizActivity).options,
+              };
+              setCurrentResults(latestResults);
+            }
+            debounceTimerRef.current = null;
+          }, DEBOUNCE_MS);
+        }
+        // If timer is running, pendingResultsRef will be processed when it fires
       }
     });
 
-    return () => unsubscribe();
+    return () => {
+      unsubscribe();
+      if (debounceTimerRef.current) {
+        clearTimeout(debounceTimerRef.current);
+        debounceTimerRef.current = null;
+      }
+    };
   }, [sessionCode, currentActivity?.activityId]);
 
   const joinSession = useCallback(async (
@@ -318,6 +371,268 @@ export const FirebaseProvider: React.FC<{ children: ReactNode }> = ({ children }
     return result;
   };
 
+  // ============ Review Game Methods ============
+
+  const joinReviewGame = useCallback(async (activityId: string, name: string) => {
+    if (!sessionCode || !participantId) {
+      console.error('joinReviewGame failed: Not in a session', { sessionCode, participantId });
+      throw new Error('Not in a session');
+    }
+
+    console.log('joinReviewGame called:', { sessionCode, participantId, activityId, name });
+
+    try {
+      const participantRef = ref(database, `sessions/${sessionCode}/reviewGameParticipants/${activityId}/${participantId}`);
+      await set(participantRef, {
+        name,
+        totalPoints: 0,
+        correctCount: 0,
+      });
+      console.log('Participant data written to Firebase');
+
+      // Update session storage
+      sessionStorage.setItem('attendeeName', name);
+      setParticipantName(name);
+
+      // Update leaderboard immediately so participant shows up
+      // Do this in a separate try-catch so it doesn't block the join
+      try {
+        await updateReviewGameLeaderboard(sessionCode, activityId);
+        console.log('joinReviewGame completed, leaderboard updated');
+      } catch (leaderboardError) {
+        console.warn('Leaderboard update failed (non-fatal):', leaderboardError);
+      }
+    } catch (error) {
+      console.error('joinReviewGame failed:', error);
+      throw error;
+    }
+  }, [sessionCode, participantId]);
+
+  const submitReviewGameAnswer = useCallback(async (
+    activityId: string,
+    questionId: string,
+    answer: number,
+    answerTime: number
+  ): Promise<{ isCorrect: boolean; points: number } | null> => {
+    if (!sessionCode || !participantId) {
+      throw new Error('Not in a session');
+    }
+
+    // Get the current activity to check correct answer
+    const activity = currentActivity as any;
+    if (!activity || activity.type !== 'review-game') {
+      throw new Error('No active review game');
+    }
+
+    const question = activity.questions?.find((q: any) => q.id === questionId);
+    if (!question) {
+      throw new Error('Question not found');
+    }
+
+    const isCorrect = answer === question.correctAnswer;
+
+    // Calculate points using Kahoot-style decay
+    const timeLimit = question.timeLimit || activity.defaultTimeLimit || 20;
+    const maxPoints = activity.maxPoints || 1000;
+    const minPoints = activity.minPoints || 100;
+
+    let points = 0;
+    if (isCorrect) {
+      const answerTimeSec = answerTime / 1000;
+      if (answerTimeSec >= timeLimit) {
+        points = minPoints;
+      } else {
+        const timeRatio = answerTimeSec / timeLimit;
+        const pointRange = maxPoints - minPoints;
+        points = Math.round(maxPoints - (pointRange * timeRatio));
+      }
+    }
+
+    // Store response
+    const responseRef = ref(database, `sessions/${sessionCode}/reviewGameResponses/${activityId}/${questionId}/${participantId}`);
+    await set(responseRef, {
+      answer,
+      answerTime,
+      submittedAt: Date.now(),
+      isCorrect,
+      points,
+    });
+
+    // Update participant totals
+    const participantRef = ref(database, `sessions/${sessionCode}/reviewGameParticipants/${activityId}/${participantId}`);
+    await runTransaction(participantRef, (current) => {
+      if (!current) return current;
+      return {
+        ...current,
+        totalPoints: (current.totalPoints || 0) + points,
+        correctCount: (current.correctCount || 0) + (isCorrect ? 1 : 0),
+      };
+    });
+
+    return { isCorrect, points };
+  }, [sessionCode, participantId, currentActivity]);
+
+  const getReviewGameState = useCallback((
+    activityId: string,
+    callback: (state: ReviewGameState | null, leaderboard: ReviewGameLeaderboardEntry[] | null, reviewGameParticipantCount?: number) => void
+  ): Unsubscribe => {
+    if (!sessionCode) {
+      return () => {};
+    }
+
+    const stateRef = ref(database, `sessions/${sessionCode}/reviewGameState/${activityId}`);
+    const leaderboardRef = ref(database, `sessions/${sessionCode}/reviewGameLeaderboard/${activityId}`);
+    const participantsRef = ref(database, `sessions/${sessionCode}/reviewGameParticipants/${activityId}`);
+    const responsesRef = ref(database, `sessions/${sessionCode}/reviewGameResponses/${activityId}`);
+
+    let currentState: ReviewGameState | null = null;
+    let currentLeaderboard: ReviewGameLeaderboardEntry[] | null = null;
+    let reviewGameParticipantCount = 0;
+    let allResponses: Record<string, any> = {};
+
+    const emitCallback = () => {
+      // Calculate response count for current question
+      let stateWithResponseCount = currentState;
+      if (currentState && currentActivity?.type === 'review-game') {
+        const activity = currentActivity as any;
+        const questionId = activity.questions?.[currentState.currentQuestionIndex]?.id;
+        const questionResponses = questionId && allResponses[questionId] ? Object.keys(allResponses[questionId]).length : 0;
+        stateWithResponseCount = { ...currentState, responseCount: questionResponses };
+      }
+      callback(stateWithResponseCount, currentLeaderboard, reviewGameParticipantCount);
+    };
+
+    const stateUnsub = onValue(stateRef, (snapshot) => {
+      currentState = snapshot.val();
+      emitCallback();
+    });
+
+    const leaderboardUnsub = onValue(leaderboardRef, (snapshot) => {
+      const data = snapshot.val();
+      currentLeaderboard = data ? (Array.isArray(data) ? data : Object.values(data)) : null;
+      emitCallback();
+    });
+
+    const participantsUnsub = onValue(participantsRef, (snapshot) => {
+      const data = snapshot.val();
+      reviewGameParticipantCount = data ? Object.keys(data).length : 0;
+      emitCallback();
+    });
+
+    const responsesUnsub = onValue(responsesRef, (snapshot) => {
+      allResponses = snapshot.val() || {};
+      emitCallback();
+    });
+
+    return () => {
+      stateUnsub();
+      leaderboardUnsub();
+      participantsUnsub();
+      responsesUnsub();
+    };
+  }, [sessionCode, currentActivity]);
+
+  // Presenter control methods
+  const startReviewGame = useCallback(async (activityId: string) => {
+    if (!sessionCode) return;
+
+    const stateRef = ref(database, `sessions/${sessionCode}/reviewGameState/${activityId}`);
+    await set(stateRef, {
+      gamePhase: 'question',
+      currentQuestionIndex: 0,
+      questionStartTime: Date.now(),
+    });
+  }, [sessionCode]);
+
+  const revealAnswer = useCallback(async (activityId: string) => {
+    if (!sessionCode) return;
+
+    // Update game phase to reveal
+    const stateRef = ref(database, `sessions/${sessionCode}/reviewGameState/${activityId}`);
+    await update(stateRef, { gamePhase: 'reveal' });
+
+    // Update leaderboard
+    await updateReviewGameLeaderboard(sessionCode, activityId);
+  }, [sessionCode]);
+
+  const nextQuestion = useCallback(async (activityId: string, totalQuestions: number) => {
+    if (!sessionCode) return;
+
+    const stateRef = ref(database, `sessions/${sessionCode}/reviewGameState/${activityId}`);
+    const stateSnapshot = await get(stateRef);
+    const currentState = stateSnapshot.val();
+
+    const nextIndex = (currentState?.currentQuestionIndex || 0) + 1;
+
+    if (nextIndex >= totalQuestions) {
+      // Game finished
+      await update(stateRef, { gamePhase: 'finished' });
+    } else {
+      // Move to next question
+      await update(stateRef, {
+        gamePhase: 'question',
+        currentQuestionIndex: nextIndex,
+        questionStartTime: Date.now(),
+      });
+    }
+  }, [sessionCode]);
+
+  const endReviewGame = useCallback(async (activityId: string) => {
+    if (!sessionCode) return;
+
+    const stateRef = ref(database, `sessions/${sessionCode}/reviewGameState/${activityId}`);
+    await update(stateRef, { gamePhase: 'finished' });
+
+    // Final leaderboard update
+    await updateReviewGameLeaderboard(sessionCode, activityId);
+  }, [sessionCode]);
+
+  const updateReviewGameLeaderboard = async (code: string, activityId: string) => {
+    // Get all participants
+    const participantsRef = ref(database, `sessions/${code}/reviewGameParticipants/${activityId}`);
+    const participantsSnapshot = await get(participantsRef);
+    const participants = participantsSnapshot.val();
+
+    if (!participants) return;
+
+    // Get current leaderboard for previous ranks
+    const leaderboardRef = ref(database, `sessions/${code}/reviewGameLeaderboard/${activityId}`);
+    const prevLeaderboardSnapshot = await get(leaderboardRef);
+    const prevLeaderboard = prevLeaderboardSnapshot.val() || [];
+    const prevRanks = new Map<string, number>();
+    if (Array.isArray(prevLeaderboard)) {
+      prevLeaderboard.forEach((entry: any) => {
+        if (entry?.participantId) {
+          prevRanks.set(entry.participantId, entry.rank);
+        }
+      });
+    }
+
+    // Build and sort leaderboard
+    // Note: Firebase doesn't allow undefined values, so only include previousRank if it exists
+    const entries: ReviewGameLeaderboardEntry[] = Object.entries(participants).map(([pid, data]: [string, any]) => {
+      const entry: ReviewGameLeaderboardEntry = {
+        participantId: pid,
+        name: data.name || 'Anonymous',
+        totalPoints: data.totalPoints || 0,
+        correctCount: data.correctCount || 0,
+        rank: 0,
+      };
+      const prevRank = prevRanks.get(pid);
+      if (prevRank !== undefined) {
+        entry.previousRank = prevRank;
+      }
+      return entry;
+    });
+
+    entries.sort((a, b) => b.totalPoints - a.totalPoints);
+    entries.forEach((entry, index) => {
+      entry.rank = index + 1;
+    });
+
+    await set(leaderboardRef, entries);
+  };
+
   const leaveSession = useCallback(() => {
     if (sessionCode && participantId) {
       // Mark as inactive
@@ -349,6 +664,16 @@ export const FirebaseProvider: React.FC<{ children: ReactNode }> = ({ children }
         error,
         participantCount,
         leaveSession,
+        // Review game
+        participantId,
+        participantName,
+        joinReviewGame,
+        submitReviewGameAnswer,
+        getReviewGameState,
+        startReviewGame,
+        revealAnswer,
+        nextQuestion,
+        endReviewGame,
       }}
     >
       {children}

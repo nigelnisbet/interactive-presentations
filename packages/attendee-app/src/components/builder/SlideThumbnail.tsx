@@ -32,11 +32,18 @@ const TextResponseIcon = () => (
   </svg>
 );
 
+const ReviewGameIcon = () => (
+  <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
+    <path d="M12 2L15.09 8.26L22 9.27L17 14.14L18.18 21.02L12 17.77L5.82 21.02L7 14.14L2 9.27L8.91 8.26L12 2Z" />
+  </svg>
+);
+
 const activityColors: Record<string, { bg: string; border: string; text: string }> = {
   poll: { bg: '#dbeafe', border: '#3b82f6', text: '#1e40af' },
   quiz: { bg: '#fef3c7', border: '#f59e0b', text: '#92400e' },
   'web-link': { bg: '#d1fae5', border: '#10b981', text: '#065f46' },
   'text-response': { bg: '#fae8ff', border: '#c026d3', text: '#86198f' },
+  'review-game': { bg: '#fef9c3', border: '#eab308', text: '#854d0e' },
 };
 
 interface SlideThumbnailProps {
@@ -45,6 +52,8 @@ interface SlideThumbnailProps {
   activity?: ActivityFormData;
   onClick: (shiftKey: boolean) => void;
   onDoubleClick?: () => void;
+  onDelete?: () => void;
+  canDelete?: boolean; // If false, delete button won't show (prevents deleting last slide)
   isSelected?: boolean;
   // Drag & drop props
   isDragging?: boolean;
@@ -61,6 +70,8 @@ export const SlideThumbnail: React.FC<SlideThumbnailProps> = ({
   activity,
   onClick,
   onDoubleClick,
+  onDelete,
+  canDelete = true,
   isSelected = false,
   isDragging = false,
   isDropTarget = false,
@@ -69,6 +80,24 @@ export const SlideThumbnail: React.FC<SlideThumbnailProps> = ({
   onDragOver,
   onDrop,
 }) => {
+  const [isHovering, setIsHovering] = React.useState(false);
+  const [showDeleteConfirm, setShowDeleteConfirm] = React.useState(false);
+
+  const handleDeleteClick = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    setShowDeleteConfirm(true);
+  };
+
+  const handleConfirmDelete = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    onDelete?.();
+    setShowDeleteConfirm(false);
+  };
+
+  const handleCancelDelete = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    setShowDeleteConfirm(false);
+  };
   const displayNumber = indexv === 0
     ? `${indexh + 1}`
     : `${indexh + 1}.${indexv + 1}`;
@@ -82,6 +111,7 @@ export const SlideThumbnail: React.FC<SlideThumbnailProps> = ({
       case 'quiz': return <QuizIcon />;
       case 'web-link': return <WebLinkIcon />;
       case 'text-response': return <TextResponseIcon />;
+      case 'review-game': return <ReviewGameIcon />;
       default: return null;
     }
   };
@@ -93,6 +123,9 @@ export const SlideThumbnail: React.FC<SlideThumbnailProps> = ({
     }
     if (activity.type === 'text-response') {
       return activity.prompt;
+    }
+    if (activity.type === 'review-game') {
+      return (activity as any).gameTitle || `${(activity as any).gameQuestions?.length || 0} Questions`;
     }
     return activity.question;
   };
@@ -123,6 +156,8 @@ export const SlideThumbnail: React.FC<SlideThumbnailProps> = ({
       onDragEnd={onDragEnd}
       onDragOver={handleDragOver}
       onDrop={handleDrop}
+      onMouseEnter={() => setIsHovering(true)}
+      onMouseLeave={() => { setIsHovering(false); setShowDeleteConfirm(false); }}
       style={{
         ...styles.thumbnail,
         backgroundColor: activity ? colors?.bg : '#374151',
@@ -136,6 +171,31 @@ export const SlideThumbnail: React.FC<SlideThumbnailProps> = ({
       }}
     >
       <div style={styles.slideNumber}>{displayNumber}</div>
+
+      {/* Delete button - show on hover for any slide (if deletion is allowed) */}
+      {isHovering && onDelete && canDelete && !showDeleteConfirm && (
+        <div
+          onClick={handleDeleteClick}
+          style={styles.deleteButton}
+          title="Delete slide"
+        >
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+            <polyline points="3 6 5 6 21 6" />
+            <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+          </svg>
+        </div>
+      )}
+
+      {/* Delete confirmation */}
+      {showDeleteConfirm && (
+        <div style={styles.deleteConfirm}>
+          <div style={styles.deleteConfirmText}>Delete?</div>
+          <div style={styles.deleteConfirmButtons}>
+            <button onClick={handleConfirmDelete} style={styles.confirmYes}>Yes</button>
+            <button onClick={handleCancelDelete} style={styles.confirmNo}>No</button>
+          </div>
+        </div>
+      )}
 
       {activity ? (
         <div style={{ ...styles.activityContent, color: colors?.text }}>
@@ -226,6 +286,66 @@ const styles: Record<string, React.CSSProperties> = {
     color: '#9ca3af',
     fontSize: '10px',
     marginTop: '4px',
+  },
+  deleteButton: {
+    position: 'absolute',
+    top: '4px',
+    right: '4px',
+    width: '22px',
+    height: '22px',
+    backgroundColor: 'rgba(239, 68, 68, 0.9)',
+    color: 'white',
+    borderRadius: '4px',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    cursor: 'pointer',
+    zIndex: 10,
+    transition: 'background-color 0.15s',
+  },
+  deleteConfirm: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(0, 0, 0, 0.85)',
+    display: 'flex',
+    flexDirection: 'column',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: '6px',
+    zIndex: 20,
+  },
+  deleteConfirmText: {
+    color: 'white',
+    fontSize: '12px',
+    fontWeight: '600',
+    marginBottom: '8px',
+  },
+  deleteConfirmButtons: {
+    display: 'flex',
+    gap: '8px',
+  },
+  confirmYes: {
+    padding: '4px 12px',
+    fontSize: '11px',
+    fontWeight: '600',
+    backgroundColor: '#ef4444',
+    color: 'white',
+    border: 'none',
+    borderRadius: '4px',
+    cursor: 'pointer',
+  },
+  confirmNo: {
+    padding: '4px 12px',
+    fontSize: '11px',
+    fontWeight: '600',
+    backgroundColor: '#6b7280',
+    color: 'white',
+    border: 'none',
+    borderRadius: '4px',
+    cursor: 'pointer',
   },
 };
 

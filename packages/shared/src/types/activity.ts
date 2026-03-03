@@ -7,7 +7,7 @@ export interface ActivityConfig {
   config: ActivityDefinition;
 }
 
-export type ActivityType = 'poll' | 'quiz' | 'stmath-game' | 'word-cloud' | 'web-link' | 'text-response';
+export type ActivityType = 'poll' | 'quiz' | 'stmath-game' | 'word-cloud' | 'web-link' | 'text-response' | 'review-game';
 
 export interface ActivityDefinition {
   type: ActivityType;
@@ -62,6 +62,49 @@ export interface TextResponseActivity extends ActivityDefinition {
   maxLength?: number;
 }
 
+// Review Game types
+export type ReviewGamePhase = 'waiting' | 'question' | 'reveal' | 'finished';
+
+export interface ReviewGameQuestion {
+  id: string;
+  question: string;
+  options: string[];
+  correctAnswer: number;
+  timeLimit?: number;
+}
+
+export interface ReviewGameActivity extends ActivityDefinition {
+  type: 'review-game';
+  title: string;
+  questions: ReviewGameQuestion[];
+  defaultTimeLimit: number;
+  maxPoints: number;
+  minPoints: number;
+}
+
+export interface ReviewGameLeaderboardEntry {
+  participantId: string;
+  name: string;
+  totalPoints: number;
+  correctCount: number;
+  rank: number;
+  previousRank?: number;
+}
+
+export interface ReviewGameResults {
+  activityId: string;
+  title: string;
+  currentQuestion: number;
+  totalQuestions: number;
+  gamePhase: ReviewGamePhase;
+  questionResults?: {
+    responses: number[];
+    totalResponses: number;
+    correctCount: number;
+  };
+  leaderboard: ReviewGameLeaderboardEntry[];
+}
+
 // Results aggregation
 export interface PollResults {
   activityId: string;
@@ -97,7 +140,7 @@ export interface WordCloudResults {
   totalSubmissions: number;
 }
 
-export type ActivityResults = PollResults | QuizResults | WordCloudResults;
+export type ActivityResults = PollResults | QuizResults | WordCloudResults | ReviewGameResults;
 
 // Presentation configuration
 export interface PresentationConfig {
