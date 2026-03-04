@@ -8,10 +8,12 @@ interface PresentationListItem {
   activityCount: number;
   tags: string[];
   source: 'google-slides' | 'slides-com' | 'unknown';
+  ownerId?: string;
 }
 
 interface PresentationPickerProps {
   onSelect: (presentationId: string) => void;
+  currentUserId?: string;
 }
 
 // Detect source platform from presentation ID
@@ -40,7 +42,7 @@ const getSourceInfo = (source: 'google-slides' | 'slides-com' | 'unknown') => {
   }
 };
 
-export const PresentationPicker: React.FC<PresentationPickerProps> = ({ onSelect }) => {
+export const PresentationPicker: React.FC<PresentationPickerProps> = ({ onSelect, currentUserId }) => {
   const [presentations, setPresentations] = useState<PresentationListItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
@@ -52,7 +54,7 @@ export const PresentationPicker: React.FC<PresentationPickerProps> = ({ onSelect
 
   useEffect(() => {
     loadPresentations();
-  }, []);
+  }, [currentUserId]);
 
   const loadPresentations = async () => {
     setLoading(true);
@@ -64,7 +66,6 @@ export const PresentationPicker: React.FC<PresentationPickerProps> = ({ onSelect
 
       if (snapshot.exists()) {
         const data = snapshot.val();
-        const tagSet = new Set<string>();
 
         const list: PresentationListItem[] = Object.keys(data).map(id => {
           const source = detectSource(id);
@@ -77,26 +78,39 @@ export const PresentationPicker: React.FC<PresentationPickerProps> = ({ onSelect
             ? [sourceTag, ...storedTags]
             : storedTags;
 
-          // Collect all unique tags
-          tags.forEach(tag => tagSet.add(tag));
-
           return {
             id,
             title: data[id].config?.title || '',
             activityCount: data[id].config?.activities?.length || 0,
             tags,
             source,
+            ownerId: data[id].config?.ownerId,
           };
         });
 
+        // Filter by current user if provided
+        const filteredList = currentUserId
+          ? list.filter(p => p.ownerId === currentUserId)  // Show only user's own presentations
+          : list;
+
+        // Collect tags only from filtered presentations
+        const tagSet = new Set<string>();
+        // Always include source tags
+        tagSet.add('Google Slides');
+        tagSet.add('slides.com');
+        // Add tags from user's presentations
+        filteredList.forEach(p => {
+          p.tags.forEach(tag => tagSet.add(tag));
+        });
+
         // Sort by title first (if exists), then by ID
-        list.sort((a, b) => {
+        filteredList.sort((a, b) => {
           const aName = a.title || a.id;
           const bName = b.title || b.id;
           return aName.localeCompare(bName);
         });
 
-        setPresentations(list);
+        setPresentations(filteredList);
         setAllTags(Array.from(tagSet).sort());
       } else {
         setPresentations([]);

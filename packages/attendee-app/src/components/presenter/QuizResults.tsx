@@ -1,6 +1,9 @@
 import React from 'react';
 import { QuizActivity, QuizResults as QuizResultsType } from '@interactive-presentations/shared';
 
+// ST Math brand colors
+const stMathBlue = '#0077c8';
+
 interface QuizResultsProps {
   activity: QuizActivity;
   results: QuizResultsType | null;
@@ -28,7 +31,7 @@ export const QuizResults: React.FC<QuizResultsProps> = ({ activity, results }) =
       {/* Statistics Cards */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
         <div className="bg-white rounded-lg shadow-md p-6 text-center">
-          <div className="text-3xl font-bold text-blue-600">{totalResponses}</div>
+          <div className="text-3xl font-bold" style={{ color: stMathBlue }}>{totalResponses}</div>
           <div className="text-sm text-gray-500 mt-1">Total Responses</div>
         </div>
         <div className="bg-white rounded-lg shadow-md p-6 text-center">
@@ -40,7 +43,7 @@ export const QuizResults: React.FC<QuizResultsProps> = ({ activity, results }) =
           <div className="text-sm text-gray-500 mt-1">Incorrect</div>
         </div>
         <div className="bg-white rounded-lg shadow-md p-6 text-center">
-          <div className="text-3xl font-bold text-purple-600">{accuracyRate.toFixed(1)}%</div>
+          <div className="text-3xl font-bold" style={{ color: stMathBlue }}>{accuracyRate.toFixed(1)}%</div>
           <div className="text-sm text-gray-500 mt-1">Accuracy</div>
         </div>
       </div>

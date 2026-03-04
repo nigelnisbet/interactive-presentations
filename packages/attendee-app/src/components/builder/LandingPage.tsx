@@ -27,13 +27,17 @@ export const parsePresentationId = (input: string): string => {
 interface LandingPageProps {
   onLoadPresentation: (presentationId: string) => void;
   onCreateNew: (presentationId: string, slideCount: number) => void;
+  onOpenLibrary: () => void;
   loading: boolean;
+  currentUserId?: string;
 }
 
 export const LandingPage: React.FC<LandingPageProps> = ({
   onLoadPresentation,
   onCreateNew,
+  onOpenLibrary,
   loading,
+  currentUserId,
 }) => {
   const [presentationInput, setPresentationInput] = useState('');
   const [presentationId, setPresentationId] = useState('');
@@ -71,6 +75,9 @@ export const LandingPage: React.FC<LandingPageProps> = ({
         <p style={styles.subtitle}>
           Create interactive activities for your slides.com and Google Slides presentations
         </p>
+        <button onClick={onOpenLibrary} style={styles.libraryBtn}>
+          📚 Activity Library
+        </button>
       </div>
 
       <div style={styles.content}>
@@ -160,7 +167,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({
 
         {/* Existing Presentations */}
         <div style={styles.existingSection}>
-          <PresentationPicker onSelect={handleSelectExisting} />
+          <PresentationPicker onSelect={handleSelectExisting} currentUserId={currentUserId} />
         </div>
       </div>
     </div>
@@ -186,6 +193,20 @@ const styles: Record<string, React.CSSProperties> = {
   subtitle: {
     fontSize: '18px',
     color: '#666',
+  },
+  libraryBtn: {
+    marginTop: '16px',
+    padding: '12px 24px',
+    backgroundColor: '#6366f1',
+    color: 'white',
+    border: 'none',
+    borderRadius: '8px',
+    cursor: 'pointer',
+    fontSize: '16px',
+    fontWeight: '500',
+    display: 'inline-flex',
+    alignItems: 'center',
+    gap: '8px',
   },
   content: {
     maxWidth: '800px',

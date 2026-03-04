@@ -3,9 +3,12 @@ import { VerticalSlideColumn } from './VerticalSlideColumn';
 import { AddSlideButton } from './SlideThumbnail';
 import { ActivityFormData } from './ActivityFormFields';
 
+type PresentationSource = 'google-slides' | 'slides-com' | 'unknown';
+
 interface SlideArrangerProps {
   presentationId: string;
   presentationTitle: string;
+  presentationSource: PresentationSource;
   onTitleChange: (title: string) => void;
   tags: string[];
   onTagsChange: (tags: string[]) => void;
@@ -18,6 +21,7 @@ interface SlideArrangerProps {
   onSlideDoubleClick: (indexh: number, indexv: number) => void;
   onAddHorizontal: () => void;
   onAddVertical: (indexh: number) => void;
+  onDeleteSlide: (indexh: number, indexv: number) => void;
   onSave: () => void;
   onBack: () => void;
   saving: boolean;
@@ -29,14 +33,19 @@ interface SlideArrangerProps {
   onDragEnd: () => void;
   onDragOver: (indexh: number, indexv: number) => void;
   onDrop: (indexh: number, indexv: number) => void;
-  // Copy/repoint dialogs
+  // Copy/repoint/transfer dialogs
   onShowCopyDialog: () => void;
   onShowRepointDialog: () => void;
+  onShowTransferDialog: () => void;
+  // User info for header
+  userName?: string;
+  onShowSettings?: () => void;
 }
 
 export const SlideArranger: React.FC<SlideArrangerProps> = ({
   presentationId,
   presentationTitle,
+  presentationSource,
   onTitleChange,
   tags,
   onTagsChange,
@@ -48,6 +57,7 @@ export const SlideArranger: React.FC<SlideArrangerProps> = ({
   onSlideDoubleClick,
   onAddHorizontal,
   onAddVertical,
+  onDeleteSlide,
   onSave,
   onBack,
   saving,
@@ -60,7 +70,12 @@ export const SlideArranger: React.FC<SlideArrangerProps> = ({
   onDrop,
   onShowCopyDialog,
   onShowRepointDialog,
+  onShowTransferDialog,
+  userName,
+  onShowSettings,
 }) => {
+  // Google Slides = vertical strip layout, slides.com = horizontal with vertical sub-slides
+  const isGoogleSlides = presentationSource === 'google-slides';
   const [isEditingTitle, setIsEditingTitle] = useState(false);
   const [editedTitle, setEditedTitle] = useState(presentationTitle);
   const [newTag, setNewTag] = useState('');
@@ -108,10 +123,17 @@ export const SlideArranger: React.FC<SlideArrangerProps> = ({
     setIsDragging(false);
   }, []);
 
+  // Calculate total slide count
+  let totalSlides = 0;
+  for (let h = 0; h < horizontalCount; h++) {
+    totalSlides += verticalCounts.get(h) || 1;
+  }
+
   // Render columns for each horizontal slide
   const columns = [];
   for (let ih = 0; ih < horizontalCount; ih++) {
-    const vertCount = verticalCounts.get(ih) || 1;
+    // For Google Slides, ignore vertical counts (always 1)
+    const vertCount = isGoogleSlides ? 1 : (verticalCounts.get(ih) || 1);
     columns.push(
       <VerticalSlideColumn
         key={ih}
@@ -122,6 +144,9 @@ export const SlideArranger: React.FC<SlideArrangerProps> = ({
         onSlideClick={onSlideClick}
         onSlideDoubleClick={onSlideDoubleClick}
         onAddVertical={onAddVertical}
+        onDeleteSlide={onDeleteSlide}
+        totalSlides={totalSlides}
+        allowVerticalSlides={!isGoogleSlides}
         draggedSlide={draggedSlide}
         dropTarget={dropTarget}
         onDragStart={onDragStart}
@@ -230,6 +255,9 @@ export const SlideArranger: React.FC<SlideArrangerProps> = ({
         </div>
         <div style={styles.headerRight}>
           {hasChanges && <span style={styles.unsavedIndicator}>Unsaved changes</span>}
+          <button onClick={onShowTransferDialog} style={styles.secondaryBtn} title="Transfer ownership to another user">
+            Transfer
+          </button>
           <button onClick={onShowRepointDialog} style={styles.secondaryBtn} title="Change presentation URL">
             Re-point
           </button>
@@ -246,6 +274,14 @@ export const SlideArranger: React.FC<SlideArrangerProps> = ({
           >
             {saving ? 'Saving...' : 'Save'}
           </button>
+          {/* User info divider */}
+          <div style={styles.headerDivider} />
+          {userName && <span style={styles.userName}>{userName}</span>}
+          {onShowSettings && (
+            <button onClick={onShowSettings} style={styles.settingsBtn}>
+              Settings
+            </button>
+          )}
         </div>
       </div>
 
@@ -260,17 +296,25 @@ export const SlideArranger: React.FC<SlideArrangerProps> = ({
         style={{
           ...styles.scrollContainer,
           cursor: isDragging ? 'grabbing' : 'grab',
+          // For Google Slides, primarily scroll vertically
+          overflowX: isGoogleSlides ? 'hidden' : 'auto',
+          overflowY: isGoogleSlides ? 'auto' : 'auto',
         }}
         onMouseDown={handleMouseDown}
         onMouseMove={handleMouseMove}
         onMouseUp={handleMouseUp}
         onMouseLeave={handleMouseLeave}
       >
-        <div style={styles.slideGrid}>
+        <div style={{
+          ...styles.slideGrid,
+          // Google Slides: vertical column layout
+          // slides.com: horizontal row layout
+          flexDirection: isGoogleSlides ? 'column' : 'row',
+        }}>
           {columns}
           <div style={styles.addColumnWrapper}>
             <AddSlideButton
-              direction="horizontal"
+              direction={isGoogleSlides ? 'vertical' : 'horizontal'}
               onClick={onAddHorizontal}
             />
           </div>
@@ -429,6 +473,25 @@ const styles: Record<string, React.CSSProperties> = {
     cursor: 'pointer',
     fontSize: '14px',
     fontWeight: '600',
+  },
+  headerDivider: {
+    width: '1px',
+    height: '24px',
+    backgroundColor: '#4b5563',
+    marginLeft: '8px',
+  },
+  userName: {
+    fontSize: '13px',
+    color: 'rgba(255,255,255,0.7)',
+  },
+  settingsBtn: {
+    padding: '6px 12px',
+    fontSize: '12px',
+    color: 'rgba(255,255,255,0.8)',
+    backgroundColor: 'rgba(255,255,255,0.1)',
+    border: '1px solid rgba(255,255,255,0.2)',
+    borderRadius: '6px',
+    cursor: 'pointer',
   },
   instructions: {
     textAlign: 'center',

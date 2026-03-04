@@ -1,6 +1,9 @@
 import React from 'react';
 import { PollActivity, PollResults as PollResultsType } from '@interactive-presentations/shared';
 
+// ST Math brand colors
+const stMathBlue = '#0077c8';
+
 interface PollResultsProps {
   activity: PollActivity;
   results: PollResultsType | null;
@@ -25,7 +28,7 @@ export const PollResults: React.FC<PollResultsProps> = ({ activity, results }) =
       <div className="flex items-center justify-between mb-6">
         <h3 className="text-xl font-bold text-gray-800">Poll Results</h3>
         <div className="text-right">
-          <div className="text-3xl font-bold text-blue-600">{totalVotes}</div>
+          <div className="text-3xl font-bold" style={{ color: stMathBlue }}>{totalVotes}</div>
           <div className="text-sm text-gray-500">Total Votes</div>
         </div>
       </div>
@@ -42,24 +45,25 @@ export const PollResults: React.FC<PollResultsProps> = ({ activity, results }) =
             return (
               <div key={index} className="relative">
                 <div className="flex items-center justify-between mb-2">
-                  <span className={`font-medium ${isLeading ? 'text-blue-700' : 'text-gray-700'}`}>
+                  <span className="font-medium" style={{ color: isLeading ? stMathBlue : '#374151' }}>
                     {stat.option}
                   </span>
                   <div className="flex items-center gap-3">
                     <span className="text-sm text-gray-500">{stat.count} votes</span>
-                    <span className={`text-lg font-bold ${isLeading ? 'text-blue-600' : 'text-gray-800'}`}>
+                    <span className="text-lg font-bold" style={{ color: isLeading ? stMathBlue : '#1f2937' }}>
                       {stat.percentage.toFixed(1)}%
                     </span>
                   </div>
                 </div>
                 <div className="w-full bg-gray-200 rounded-full h-8 overflow-hidden">
                   <div
-                    className={`h-full rounded-full transition-all duration-500 ${
-                      isLeading
-                        ? 'bg-gradient-to-r from-blue-500 to-blue-600'
-                        : 'bg-gradient-to-r from-gray-400 to-gray-500'
-                    }`}
-                    style={{ width: `${stat.percentage}%` }}
+                    className="h-full rounded-full transition-all duration-500"
+                    style={{
+                      width: `${stat.percentage}%`,
+                      background: isLeading
+                        ? `linear-gradient(to right, ${stMathBlue}, #005a9e)`
+                        : 'linear-gradient(to right, #9ca3af, #6b7280)',
+                    }}
                   >
                     {stat.count > 0 && (
                       <div className="flex items-center justify-end h-full px-3 text-white font-semibold text-sm">

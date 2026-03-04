@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import { ref, onValue } from 'firebase/database';
 import { initializeApp, getApps } from 'firebase/app';
 import { getDatabase } from 'firebase/database';
@@ -16,6 +16,9 @@ const firebaseConfig = {
 
 const app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApps()[0];
 const database = getDatabase(app);
+
+// ST Math brand colors
+const stMathBlue = '#0077c8';
 
 interface TextResponseActivity {
   activityId?: string;
@@ -36,8 +39,14 @@ interface ResponseEntry {
   participantId: string;
 }
 
+const RESPONSES_PER_PAGE = 50;
+const DEBOUNCE_MS = 500;
+
 export const TextResponseResults: React.FC<TextResponseResultsProps> = ({ activity, sessionCode }) => {
   const [responses, setResponses] = useState<ResponseEntry[]>([]);
+  const [visibleCount, setVisibleCount] = useState(RESPONSES_PER_PAGE);
+  const pendingResponsesRef = useRef<ResponseEntry[] | null>(null);
+  const debounceTimerRef = useRef<NodeJS.Timeout | null>(null);
 
   useEffect(() => {
     if (!activity.activityId || !sessionCode) return;
@@ -53,20 +62,53 @@ export const TextResponseResults: React.FC<TextResponseResultsProps> = ({ activi
         }));
         // Sort by submission time (newest first)
         entries.sort((a, b) => b.submittedAt - a.submittedAt);
-        setResponses(entries);
+
+        // Debounce updates for large sessions
+        pendingResponsesRef.current = entries;
+
+        if (!debounceTimerRef.current) {
+          setResponses(entries);
+          debounceTimerRef.current = setTimeout(() => {
+            if (pendingResponsesRef.current) {
+              setResponses(pendingResponsesRef.current);
+            }
+            debounceTimerRef.current = null;
+          }, DEBOUNCE_MS);
+        }
       } else {
         setResponses([]);
       }
     });
 
-    return () => unsubscribe();
+    return () => {
+      unsubscribe();
+      if (debounceTimerRef.current) {
+        clearTimeout(debounceTimerRef.current);
+        debounceTimerRef.current = null;
+      }
+    };
   }, [activity.activityId, sessionCode]);
+
+  // Reset visible count when activity changes
+  useEffect(() => {
+    setVisibleCount(RESPONSES_PER_PAGE);
+  }, [activity.activityId]);
+
+  const visibleResponses = responses.slice(0, visibleCount);
+  const hasMore = responses.length > visibleCount;
+
+  const loadMore = () => {
+    setVisibleCount(prev => prev + RESPONSES_PER_PAGE);
+  };
 
   return (
     <div className="bg-white rounded-lg shadow-md p-6">
       <div className="flex items-center justify-between mb-6">
         <h3 className="text-xl font-bold text-gray-800">Responses</h3>
-        <span className="bg-fuchsia-100 text-fuchsia-800 px-3 py-1 rounded-full text-sm font-semibold">
+        <span
+          className="px-3 py-1 rounded-full text-sm font-semibold"
+          style={{ backgroundColor: '#e0f2fe', color: stMathBlue }}
+        >
           {responses.length} {responses.length === 1 ? 'response' : 'responses'}
         </span>
       </div>
@@ -77,19 +119,31 @@ export const TextResponseResults: React.FC<TextResponseResultsProps> = ({ activi
           <p>Waiting for responses...</p>
         </div>
       ) : (
-        <div className="space-y-4 max-h-96 overflow-y-auto">
-          {responses.map((entry) => (
-            <div
-              key={entry.participantId}
-              className="p-4 bg-gray-50 rounded-lg border-l-4 border-fuchsia-500"
+        <>
+          <div className="space-y-4 max-h-96 overflow-y-auto">
+            {visibleResponses.map((entry) => (
+              <div
+                key={entry.participantId}
+                className="p-4 bg-gray-50 rounded-lg border-l-4"
+                style={{ borderLeftColor: stMathBlue }}
+              >
+                <p className="text-gray-800">{entry.answer}</p>
+                <p className="text-xs text-gray-400 mt-2">
+                  {new Date(entry.submittedAt).toLocaleTimeString()}
+                </p>
+              </div>
+            ))}
+          </div>
+          {hasMore && (
+            <button
+              onClick={loadMore}
+              className="mt-4 w-full py-2 text-sm font-medium rounded-lg transition-colors"
+              style={{ backgroundColor: '#e0f2fe', color: stMathBlue }}
             >
-              <p className="text-gray-800">{entry.answer}</p>
-              <p className="text-xs text-gray-400 mt-2">
-                {new Date(entry.submittedAt).toLocaleTimeString()}
-              </p>
-            </div>
-          ))}
-        </div>
+              Load more ({responses.length - visibleCount} remaining)
+            </button>
+          )}
+        </>
       )}
     </div>
   );

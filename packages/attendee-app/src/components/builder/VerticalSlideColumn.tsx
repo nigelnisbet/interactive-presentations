@@ -10,6 +10,9 @@ interface VerticalSlideColumnProps {
   onSlideClick: (indexh: number, indexv: number, shiftKey: boolean) => void;
   onSlideDoubleClick: (indexh: number, indexv: number) => void;
   onAddVertical: (indexh: number) => void;
+  onDeleteSlide: (indexh: number, indexv: number) => void;
+  totalSlides: number; // Total slides across all columns (to prevent deleting last slide)
+  allowVerticalSlides?: boolean; // If false, hide the "add vertical" button (e.g., for Google Slides)
   // Drag & drop
   draggedSlide: { indexh: number; indexv: number } | null;
   dropTarget: { indexh: number; indexv: number } | null;
@@ -27,6 +30,9 @@ export const VerticalSlideColumn: React.FC<VerticalSlideColumnProps> = ({
   onSlideClick,
   onSlideDoubleClick,
   onAddVertical,
+  onDeleteSlide,
+  totalSlides,
+  allowVerticalSlides = true,
   draggedSlide,
   dropTarget,
   onDragStart,
@@ -67,6 +73,8 @@ export const VerticalSlideColumn: React.FC<VerticalSlideColumnProps> = ({
         activity={getActivityAt(indexh, iv)}
         onClick={(shiftKey) => onSlideClick(indexh, iv, shiftKey)}
         onDoubleClick={() => onSlideDoubleClick(indexh, iv)}
+        onDelete={() => onDeleteSlide(indexh, iv)}
+        canDelete={totalSlides > 1}
         isSelected={isSelected(indexh, iv)}
         isDragging={isDragging(indexh, iv)}
         isDropTarget={isDropTarget(indexh, iv)}
@@ -81,10 +89,12 @@ export const VerticalSlideColumn: React.FC<VerticalSlideColumnProps> = ({
   return (
     <div style={styles.column}>
       {slides}
-      <AddSlideButton
-        direction="vertical"
-        onClick={() => onAddVertical(indexh)}
-      />
+      {allowVerticalSlides && (
+        <AddSlideButton
+          direction="vertical"
+          onClick={() => onAddVertical(indexh)}
+        />
+      )}
     </div>
   );
 };

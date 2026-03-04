@@ -1,5 +1,8 @@
-import React, { useEffect, useCallback } from 'react';
-import { ActivityFormFields, ActivityFormData, validateActivity } from './ActivityFormFields';
+import React, { useEffect, useCallback, useState } from 'react';
+import { ref, get } from 'firebase/database';
+import { ActivityFormFields, ActivityFormData, validateActivity, getDefaultActivity } from './ActivityFormFields';
+import { database } from './firebaseConfig';
+import { LibraryActivity, saveToLibrary } from './ActivityLibrary';
 
 interface ActivityEditorModalProps {
   isOpen: boolean;
@@ -10,7 +13,10 @@ interface ActivityEditorModalProps {
   onSave: () => void;
   onDelete: () => void;
   onClose: () => void;
+  currentUserId?: string;
 }
+
+type ModalMode = 'create' | 'library';
 
 export const ActivityEditorModal: React.FC<ActivityEditorModalProps> = ({
   isOpen,
@@ -21,7 +27,18 @@ export const ActivityEditorModal: React.FC<ActivityEditorModalProps> = ({
   onSave,
   onDelete,
   onClose,
+  currentUserId,
 }) => {
+  const [mode, setMode] = useState<ModalMode>('create');
+  const [libraryActivities, setLibraryActivities] = useState<LibraryActivity[]>([]);
+  const [loadingLibrary, setLoadingLibrary] = useState(false);
+  const [librarySearch, setLibrarySearch] = useState('');
+  const [libraryFilter, setLibraryFilter] = useState<'all' | 'poll' | 'quiz' | 'text-response' | 'web-link'>('all');
+  const [savingToLibrary, setSavingToLibrary] = useState(false);
+  const [libraryMessage, setLibraryMessage] = useState<string | null>(null);
+  const [sourceLibraryActivity, setSourceLibraryActivity] = useState<LibraryActivity | null>(null);
+  const [libraryUpdateAvailable, setLibraryUpdateAvailable] = useState(false);
+
   // Handle escape key to close
   const handleKeyDown = useCallback((e: KeyboardEvent) => {
     if (e.key === 'Escape') {
@@ -33,12 +50,99 @@ export const ActivityEditorModal: React.FC<ActivityEditorModalProps> = ({
     if (isOpen) {
       document.addEventListener('keydown', handleKeyDown);
       document.body.style.overflow = 'hidden';
+      // Reset mode when opening for a new activity
+      if (!existingActivity) {
+        setMode('create');
+      }
     }
     return () => {
       document.removeEventListener('keydown', handleKeyDown);
       document.body.style.overflow = '';
     };
-  }, [isOpen, handleKeyDown]);
+  }, [isOpen, handleKeyDown, existingActivity]);
+
+  // Load library activities when switching to library mode
+  useEffect(() => {
+    if (isOpen && mode === 'library' && currentUserId) {
+      loadLibraryActivities();
+    }
+  }, [isOpen, mode, currentUserId]);
+
+  // Check for library updates when opening an existing activity from library
+  useEffect(() => {
+    const checkLibraryUpdate = async () => {
+      const sourceId = (activity as any).sourceLibraryId;
+      const copiedAt = (activity as any).copiedFromLibraryAt;
+
+      if (!isOpen || !existingActivity || !sourceId) {
+        setSourceLibraryActivity(null);
+        setLibraryUpdateAvailable(false);
+        return;
+      }
+
+      try {
+        const libRef = ref(database, `activityLibrary/${sourceId}`);
+        const snapshot = await get(libRef);
+
+        if (snapshot.exists()) {
+          const libActivity: LibraryActivity = {
+            id: sourceId,
+            ...snapshot.val(),
+          };
+          setSourceLibraryActivity(libActivity);
+
+          // Check if library was updated after this activity was copied
+          if (copiedAt && libActivity.updatedAt > copiedAt) {
+            setLibraryUpdateAvailable(true);
+          } else {
+            setLibraryUpdateAvailable(false);
+          }
+        } else {
+          // Library activity was deleted
+          setSourceLibraryActivity(null);
+          setLibraryUpdateAvailable(false);
+        }
+      } catch (err) {
+        console.error('Error checking library update:', err);
+      }
+    };
+
+    checkLibraryUpdate();
+  }, [isOpen, existingActivity, activity]);
+
+  const loadLibraryActivities = async () => {
+    if (!currentUserId) return;
+
+    setLoadingLibrary(true);
+    try {
+      const libraryRef = ref(database, 'activityLibrary');
+      const snapshot = await get(libraryRef);
+
+      if (snapshot.exists()) {
+        const data = snapshot.val();
+        const list: LibraryActivity[] = Object.keys(data).map(id => ({
+          id,
+          ...data[id],
+        }));
+
+        // Filter: show user's own + shared
+        const filtered = list.filter(
+          a => a.createdBy === currentUserId || a.isShared
+        );
+
+        // Sort by updatedAt descending
+        filtered.sort((a, b) => b.updatedAt - a.updatedAt);
+
+        setLibraryActivities(filtered);
+      } else {
+        setLibraryActivities([]);
+      }
+    } catch (err) {
+      console.error('Error loading library:', err);
+    } finally {
+      setLoadingLibrary(false);
+    }
+  };
 
   if (!isOpen) return null;
 
@@ -63,11 +167,181 @@ export const ActivityEditorModal: React.FC<ActivityEditorModalProps> = ({
     onSave();
   };
 
+  // Save/update to library
+  const handleSaveToLibrary = async () => {
+    if (!currentUserId) return;
+
+    const error = validateActivity(activity);
+    if (error) {
+      alert(error);
+      return;
+    }
+
+    setSavingToLibrary(true);
+    setLibraryMessage(null);
+
+    try {
+      // Generate a name based on the activity content
+      let name = '';
+      if (activity.type === 'poll' || activity.type === 'quiz') {
+        name = activity.question?.slice(0, 50) || `${activity.type} activity`;
+      } else if (activity.type === 'text-response') {
+        name = activity.prompt?.slice(0, 50) || 'Text response';
+      } else if (activity.type === 'web-link') {
+        name = activity.title || activity.url?.slice(0, 50) || 'Web link';
+      }
+
+      const config: LibraryActivity['config'] = {};
+      if (activity.type === 'poll') {
+        config.question = activity.question;
+        config.options = activity.options;
+        config.showResults = activity.showResults;
+      } else if (activity.type === 'quiz') {
+        config.question = activity.question;
+        config.options = activity.options;
+        config.correctAnswer = activity.correctAnswer;
+        config.timeLimit = activity.timeLimit;
+        config.showResults = activity.showResults;
+      } else if (activity.type === 'text-response') {
+        config.prompt = activity.prompt;
+        config.placeholder = activity.placeholder;
+        config.maxLength = activity.maxLength;
+      } else if (activity.type === 'web-link') {
+        config.title = activity.title;
+        config.description = activity.description;
+        config.url = activity.url;
+        config.displayMode = activity.displayMode;
+        config.fullScreen = activity.fullScreen;
+      }
+
+      // Check if this activity came from library (has sourceLibraryId)
+      const sourceId = (activity as any).sourceLibraryId;
+
+      await saveToLibrary(
+        { type: activity.type, name, config },
+        currentUserId,
+        false,
+        sourceId
+      );
+
+      setLibraryMessage(sourceId ? 'Updated in library!' : 'Saved to library!');
+      setTimeout(() => setLibraryMessage(null), 3000);
+    } catch (err) {
+      console.error('Error saving to library:', err);
+      setLibraryMessage('Failed to save');
+    } finally {
+      setSavingToLibrary(false);
+    }
+  };
+
+  // Pull update from library
+  const handlePullLibraryUpdate = () => {
+    if (!sourceLibraryActivity) return;
+
+    const libActivity = sourceLibraryActivity;
+    const updatedActivity: ActivityFormData & { sourceLibraryId?: string; copiedFromLibraryAt?: number } = {
+      ...activity,
+      sourceLibraryId: libActivity.id,
+      copiedFromLibraryAt: Date.now(),
+    };
+
+    // Update fields from library
+    if (libActivity.type === 'poll' || libActivity.type === 'quiz') {
+      updatedActivity.question = libActivity.config.question || '';
+      updatedActivity.options = libActivity.config.options || ['', ''];
+      updatedActivity.showResults = libActivity.config.showResults || 'live';
+      if (libActivity.type === 'quiz') {
+        updatedActivity.correctAnswer = libActivity.config.correctAnswer || 0;
+        updatedActivity.timeLimit = libActivity.config.timeLimit || 30;
+      }
+    } else if (libActivity.type === 'text-response') {
+      updatedActivity.prompt = libActivity.config.prompt || '';
+      updatedActivity.placeholder = libActivity.config.placeholder || '';
+      updatedActivity.maxLength = libActivity.config.maxLength || 500;
+    } else if (libActivity.type === 'web-link') {
+      updatedActivity.title = libActivity.config.title || '';
+      updatedActivity.description = libActivity.config.description || '';
+      updatedActivity.url = libActivity.config.url || '';
+      updatedActivity.displayMode = libActivity.config.displayMode || 'iframe';
+      updatedActivity.fullScreen = libActivity.config.fullScreen || false;
+    }
+
+    onActivityChange(updatedActivity);
+    setLibraryUpdateAvailable(false);
+    setLibraryMessage('Updated from library!');
+    setTimeout(() => setLibraryMessage(null), 3000);
+  };
+
+  // Select activity from library
+  const handleSelectFromLibrary = (libActivity: LibraryActivity) => {
+    const newActivity: ActivityFormData & { sourceLibraryId?: string; copiedFromLibraryAt?: number } = {
+      ...getDefaultActivity(libActivity.type, slidePosition.indexh, slidePosition.indexv),
+      activityId: `${libActivity.type}-slide${slidePosition.indexh}-${Date.now().toString(36)}`,
+      sourceLibraryId: libActivity.id,
+      copiedFromLibraryAt: Date.now(),
+    };
+
+    // Copy config fields
+    if (libActivity.type === 'poll' || libActivity.type === 'quiz') {
+      newActivity.question = libActivity.config.question || '';
+      newActivity.options = libActivity.config.options || ['', ''];
+      newActivity.showResults = libActivity.config.showResults || 'live';
+      if (libActivity.type === 'quiz') {
+        newActivity.correctAnswer = libActivity.config.correctAnswer || 0;
+        newActivity.timeLimit = libActivity.config.timeLimit || 30;
+      }
+    } else if (libActivity.type === 'text-response') {
+      newActivity.prompt = libActivity.config.prompt || '';
+      newActivity.placeholder = libActivity.config.placeholder || '';
+      newActivity.maxLength = libActivity.config.maxLength || 500;
+    } else if (libActivity.type === 'web-link') {
+      newActivity.title = libActivity.config.title || '';
+      newActivity.description = libActivity.config.description || '';
+      newActivity.url = libActivity.config.url || '';
+      newActivity.displayMode = libActivity.config.displayMode || 'iframe';
+      newActivity.fullScreen = libActivity.config.fullScreen || false;
+    }
+
+    onActivityChange(newActivity);
+    setMode('create');
+  };
+
   const handleBackdropClick = (e: React.MouseEvent) => {
     if (e.target === e.currentTarget) {
       onClose();
     }
   };
+
+  // Filter library activities
+  const filteredLibrary = libraryActivities.filter(a => {
+    if (libraryFilter !== 'all' && a.type !== libraryFilter) return false;
+    if (!librarySearch.trim()) return true;
+
+    const search = librarySearch.toLowerCase();
+    const name = a.name.toLowerCase();
+    const question = (a.config.question || '').toLowerCase();
+    const title = (a.config.title || '').toLowerCase();
+    const prompt = (a.config.prompt || '').toLowerCase();
+
+    return name.includes(search) || question.includes(search) || title.includes(search) || prompt.includes(search);
+  });
+
+  // Get preview text for library activity
+  const getPreviewText = (a: LibraryActivity): string => {
+    switch (a.type) {
+      case 'poll':
+      case 'quiz':
+        return a.config.question || 'No question';
+      case 'text-response':
+        return a.config.prompt || 'No prompt';
+      case 'web-link':
+        return a.config.title || a.config.url || 'No title';
+      default:
+        return '';
+    }
+  };
+
+  const hasSourceLibraryId = !!(activity as any).sourceLibraryId;
 
   return (
     <div style={styles.overlay} onClick={handleBackdropClick}>
@@ -79,12 +353,112 @@ export const ActivityEditorModal: React.FC<ActivityEditorModalProps> = ({
           <button onClick={onClose} style={styles.closeBtn}>×</button>
         </div>
 
+        {/* Mode tabs - only show for new activities */}
+        {!existingActivity && (
+          <div style={styles.modeTabs}>
+            <button
+              onClick={() => setMode('create')}
+              style={{
+                ...styles.modeTab,
+                ...(mode === 'create' ? styles.modeTabActive : {}),
+              }}
+            >
+              Create New
+            </button>
+            <button
+              onClick={() => setMode('library')}
+              style={{
+                ...styles.modeTab,
+                ...(mode === 'library' ? styles.modeTabActive : {}),
+              }}
+            >
+              Choose from Library
+            </button>
+          </div>
+        )}
+
         <div style={styles.modalBody}>
-          <ActivityFormFields
-            activity={activity}
-            onChange={onActivityChange}
-            showSlidePosition={false}
-          />
+          {/* Library update available banner */}
+          {mode === 'create' && libraryUpdateAvailable && sourceLibraryActivity && (
+            <div style={styles.updateBanner}>
+              <span style={styles.updateBannerText}>
+                Library update available
+              </span>
+              <button
+                onClick={handlePullLibraryUpdate}
+                style={styles.updateBannerBtn}
+              >
+                Pull Update
+              </button>
+            </div>
+          )}
+
+          {mode === 'create' ? (
+            <ActivityFormFields
+              activity={activity}
+              onChange={onActivityChange}
+              showSlidePosition={false}
+            />
+          ) : (
+            <div style={styles.libraryPicker}>
+              {/* Search and filter */}
+              <div style={styles.libraryControls}>
+                <input
+                  type="text"
+                  value={librarySearch}
+                  onChange={e => setLibrarySearch(e.target.value)}
+                  placeholder="Search activities..."
+                  style={styles.librarySearch}
+                />
+                <select
+                  value={libraryFilter}
+                  onChange={e => setLibraryFilter(e.target.value as any)}
+                  style={styles.libraryFilterSelect}
+                >
+                  <option value="all">All Types</option>
+                  <option value="poll">Polls</option>
+                  <option value="quiz">Quizzes</option>
+                  <option value="text-response">Text Responses</option>
+                  <option value="web-link">Web Links</option>
+                </select>
+              </div>
+
+              {/* Activity list */}
+              {loadingLibrary ? (
+                <div style={styles.libraryLoading}>Loading library...</div>
+              ) : filteredLibrary.length === 0 ? (
+                <div style={styles.libraryEmpty}>
+                  {librarySearch
+                    ? 'No activities match your search'
+                    : 'No activities in library yet. Create some first!'}
+                </div>
+              ) : (
+                <div style={styles.libraryList}>
+                  {filteredLibrary.map(a => (
+                    <div
+                      key={a.id}
+                      style={styles.libraryItem}
+                      onClick={() => handleSelectFromLibrary(a)}
+                    >
+                      <div style={styles.libraryItemHeader}>
+                        <span style={styles.libraryItemType}>
+                          {a.type === 'poll' && '📊'}
+                          {a.type === 'quiz' && '❓'}
+                          {a.type === 'text-response' && '💬'}
+                          {a.type === 'web-link' && '🔗'}
+                        </span>
+                        <span style={styles.libraryItemName}>{a.name}</span>
+                        {a.isShared && a.createdBy !== currentUserId && (
+                          <span style={styles.libraryItemShared}>Shared</span>
+                        )}
+                      </div>
+                      <div style={styles.libraryItemPreview}>{getPreviewText(a)}</div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
         </div>
 
         <div style={styles.modalFooter}>
@@ -94,14 +468,34 @@ export const ActivityEditorModal: React.FC<ActivityEditorModalProps> = ({
                 Delete Activity
               </button>
             )}
+            {/* Save to library button */}
+            {mode === 'create' && currentUserId && (
+              <button
+                onClick={handleSaveToLibrary}
+                style={styles.libraryBtn}
+                disabled={savingToLibrary}
+                title={hasSourceLibraryId ? 'Update the library version with your changes' : 'Save this activity to your library for reuse'}
+              >
+                {savingToLibrary
+                  ? 'Saving...'
+                  : hasSourceLibraryId
+                  ? '↑ Update Library'
+                  : '📚 Save to Library'}
+              </button>
+            )}
+            {libraryMessage && (
+              <span style={styles.libraryMessage}>{libraryMessage}</span>
+            )}
           </div>
           <div style={styles.footerRight}>
             <button onClick={onClose} style={styles.cancelBtn}>
               Cancel
             </button>
-            <button onClick={handleSave} style={styles.saveBtn}>
-              {existingActivity ? 'Update' : 'Add'} Activity
-            </button>
+            {mode === 'create' && (
+              <button onClick={handleSave} style={styles.saveBtn}>
+                {existingActivity ? 'Update' : 'Add'} Activity
+              </button>
+            )}
           </div>
         </div>
       </div>
@@ -123,7 +517,7 @@ const styles: Record<string, React.CSSProperties> = {
   modal: {
     backgroundColor: '#ffffff',
     borderRadius: '12px',
-    maxWidth: '600px',
+    maxWidth: '700px',
     width: '100%',
     maxHeight: '90vh',
     display: 'flex',
@@ -155,10 +549,57 @@ const styles: Record<string, React.CSSProperties> = {
     lineHeight: '32px',
     textAlign: 'center',
   },
+  modeTabs: {
+    display: 'flex',
+    borderBottom: '1px solid #e5e7eb',
+  },
+  modeTab: {
+    flex: 1,
+    padding: '12px 16px',
+    backgroundColor: 'transparent',
+    color: '#6b7280',
+    border: 'none',
+    borderBottom: '2px solid transparent',
+    cursor: 'pointer',
+    fontSize: '14px',
+    fontWeight: '500',
+    transition: 'all 0.2s',
+  },
+  modeTabActive: {
+    color: '#3b82f6',
+    borderBottomColor: '#3b82f6',
+    backgroundColor: '#f0f9ff',
+  },
   modalBody: {
     padding: '24px',
     overflowY: 'auto',
     flex: 1,
+    minHeight: '300px',
+  },
+  updateBanner: {
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    padding: '12px 16px',
+    backgroundColor: '#fef3c7',
+    border: '1px solid #fcd34d',
+    borderRadius: '8px',
+    marginBottom: '16px',
+  },
+  updateBannerText: {
+    fontSize: '14px',
+    fontWeight: '500',
+    color: '#92400e',
+  },
+  updateBannerBtn: {
+    padding: '6px 12px',
+    backgroundColor: '#f59e0b',
+    color: 'white',
+    border: 'none',
+    borderRadius: '6px',
+    cursor: 'pointer',
+    fontSize: '13px',
+    fontWeight: '500',
   },
   modalFooter: {
     display: 'flex',
@@ -168,8 +609,13 @@ const styles: Record<string, React.CSSProperties> = {
     borderTop: '1px solid #e5e7eb',
     backgroundColor: '#f9fafb',
     borderRadius: '0 0 12px 12px',
+    gap: '12px',
   },
-  footerLeft: {},
+  footerLeft: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '12px',
+  },
   footerRight: {
     display: 'flex',
     gap: '12px',
@@ -182,6 +628,21 @@ const styles: Record<string, React.CSSProperties> = {
     borderRadius: '6px',
     cursor: 'pointer',
     fontSize: '14px',
+    fontWeight: '500',
+  },
+  libraryBtn: {
+    padding: '10px 16px',
+    backgroundColor: '#eef2ff',
+    color: '#4f46e5',
+    border: '1px solid #c7d2fe',
+    borderRadius: '6px',
+    cursor: 'pointer',
+    fontSize: '13px',
+    fontWeight: '500',
+  },
+  libraryMessage: {
+    fontSize: '13px',
+    color: '#10b981',
     fontWeight: '500',
   },
   cancelBtn: {
@@ -203,5 +664,86 @@ const styles: Record<string, React.CSSProperties> = {
     cursor: 'pointer',
     fontSize: '14px',
     fontWeight: '600',
+  },
+  // Library picker styles
+  libraryPicker: {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '16px',
+  },
+  libraryControls: {
+    display: 'flex',
+    gap: '12px',
+  },
+  librarySearch: {
+    flex: 1,
+    padding: '10px 14px',
+    border: '1px solid #d1d5db',
+    borderRadius: '6px',
+    fontSize: '14px',
+  },
+  libraryFilterSelect: {
+    padding: '10px 14px',
+    border: '1px solid #d1d5db',
+    borderRadius: '6px',
+    fontSize: '14px',
+    backgroundColor: 'white',
+  },
+  libraryLoading: {
+    textAlign: 'center',
+    padding: '40px',
+    color: '#6b7280',
+  },
+  libraryEmpty: {
+    textAlign: 'center',
+    padding: '40px',
+    color: '#9ca3af',
+    fontSize: '14px',
+  },
+  libraryList: {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '8px',
+    maxHeight: '400px',
+    overflowY: 'auto',
+  },
+  libraryItem: {
+    padding: '12px 16px',
+    backgroundColor: '#f9fafb',
+    borderRadius: '8px',
+    cursor: 'pointer',
+    transition: 'background-color 0.2s',
+    border: '1px solid #e5e7eb',
+  },
+  libraryItemHeader: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '8px',
+    marginBottom: '4px',
+  },
+  libraryItemType: {
+    fontSize: '16px',
+  },
+  libraryItemName: {
+    fontSize: '14px',
+    fontWeight: '600',
+    color: '#333',
+    flex: 1,
+  },
+  libraryItemShared: {
+    fontSize: '10px',
+    fontWeight: '600',
+    color: '#6366f1',
+    backgroundColor: '#eef2ff',
+    padding: '2px 8px',
+    borderRadius: '10px',
+    textTransform: 'uppercase',
+  },
+  libraryItemPreview: {
+    fontSize: '13px',
+    color: '#6b7280',
+    overflow: 'hidden',
+    textOverflow: 'ellipsis',
+    whiteSpace: 'nowrap',
   },
 };
