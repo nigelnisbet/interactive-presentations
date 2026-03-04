@@ -1,5 +1,5 @@
 import React, { useEffect } from 'react';
-import { BrowserRouter, Routes, Route, Navigate, useNavigate } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, Navigate, useNavigate, useLocation } from 'react-router-dom';
 import { JoinSession } from './pages/JoinSession';
 import { WaitingScreen } from './pages/WaitingScreen';
 import { PresenterDashboard } from './pages/PresenterDashboard';
@@ -12,13 +12,18 @@ import { ReviewGame } from './components/activities/ReviewGame';
 import { SocketProvider, useSocket } from './contexts/FirebaseContext';
 
 const ActivityRouter: React.FC = () => {
-  const { currentActivity } = useSocket();
+  const { sessionEnded, sessionCode } = useSocket();
   const navigate = useNavigate();
+  const location = useLocation();
 
+  // Redirect to join page when session ends or disconnects (for attendee pages only)
   useEffect(() => {
-    // If an activity becomes active, stay on waiting screen but render activity
-    // The activity components will overlay the waiting screen
-  }, [currentActivity, navigate]);
+    const isAttendeePage = location.pathname === '/waiting';
+    if (isAttendeePage && (sessionEnded || !sessionCode)) {
+      console.log('Session ended or disconnected, redirecting to join page');
+      navigate('/join', { replace: true });
+    }
+  }, [sessionEnded, sessionCode, navigate, location.pathname]);
 
   return (
     <Routes>

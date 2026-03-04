@@ -53,6 +53,8 @@ interface ReviewGameState {
 
 interface FirebaseContextType {
   connected: boolean;
+  sessionEnded: boolean;
+  sessionCode: string | null;
   joinSession: (sessionCode: string, name?: string) => Promise<AttendeeJoinedPayload>;
   submitResponse: (activityId: string, answer: any) => Promise<void>;
   currentActivity: ActivityDefinition | null;
@@ -77,6 +79,7 @@ const FirebaseContext = createContext<FirebaseContextType | undefined>(undefined
 
 export const FirebaseProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
   const [connected, setConnected] = useState(false);
+  const [sessionEnded, setSessionEnded] = useState(false);
   const [sessionCode, setSessionCode] = useState<string | null>(null);
   const [participantId, setParticipantId] = useState<string | null>(null);
   const [participantName, setParticipantName] = useState<string | null>(
@@ -127,10 +130,13 @@ export const FirebaseProvider: React.FC<{ children: ReactNode }> = ({ children }
       console.log('Session status:', status);
       if (status === 'ended') {
         setError('Session has ended');
+        setSessionEnded(true);
         setConnected(false);
         setCurrentActivity(null);
         setCurrentResults(null);
         setParticipantCount(0);
+        setSessionCode(null);
+        setParticipantId(null);
         sessionStorage.removeItem('currentSessionCode');
         sessionStorage.removeItem('attendeeName');
         sessionStorage.removeItem('participantId');
@@ -275,6 +281,7 @@ export const FirebaseProvider: React.FC<{ children: ReactNode }> = ({ children }
       }
 
       setError(null);
+      setSessionEnded(false);
 
       // Return payload matching old Socket interface
       const response: AttendeeJoinedPayload = {
@@ -657,6 +664,8 @@ export const FirebaseProvider: React.FC<{ children: ReactNode }> = ({ children }
     <FirebaseContext.Provider
       value={{
         connected,
+        sessionEnded,
+        sessionCode,
         joinSession,
         submitResponse,
         currentActivity,
