@@ -5,7 +5,7 @@ import { database } from './firebaseConfig';
 // Library activity stored in Firebase
 export interface LibraryActivity {
   id: string;
-  type: 'poll' | 'quiz' | 'text-response' | 'web-link' | 'review-game';
+  type: 'poll' | 'quiz' | 'text-response' | 'web-link' | 'review-game' | 'submit-sample';
   name: string;
   config: {
     // Poll/Quiz fields
@@ -35,6 +35,11 @@ export interface LibraryActivity {
     defaultTimeLimit?: number;
     maxPoints?: number;
     minPoints?: number;
+    // Submit-sample fields
+    instructions?: string;
+    allowAnnotations?: boolean;
+    allowMultipleSubmissions?: boolean;
+    canvasSelector?: string;
   };
   createdBy: string;
   createdAt: number;
@@ -49,7 +54,7 @@ interface ActivityLibraryProps {
   mode: 'browse' | 'pick'; // browse = standalone page, pick = picker in modal
 }
 
-type ActivityType = 'poll' | 'quiz' | 'text-response' | 'web-link' | 'review-game';
+type ActivityType = 'poll' | 'quiz' | 'text-response' | 'web-link' | 'review-game' | 'submit-sample';
 
 const ACTIVITY_TYPES: { type: ActivityType; label: string; icon: string }[] = [
   { type: 'poll', label: 'Polls', icon: '📊' },
@@ -57,6 +62,7 @@ const ACTIVITY_TYPES: { type: ActivityType; label: string; icon: string }[] = [
   { type: 'review-game', label: 'Review Games', icon: '⭐' },
   { type: 'text-response', label: 'Text Responses', icon: '💬' },
   { type: 'web-link', label: 'Web Links', icon: '🔗' },
+  { type: 'submit-sample', label: 'Canvas Activities', icon: '🎨' },
 ];
 
 // Generate a hash for duplicate detection based on activity content
@@ -71,6 +77,8 @@ const generateActivityHash = (type: ActivityType, config: LibraryActivity['confi
   } else if (type === 'review-game') {
     const qs = (config.questions || []).map(q => q.question).join('|');
     return `${type}:${config.title || ''}:${qs}`;
+  } else if (type === 'submit-sample') {
+    return `${type}:${config.url || ''}:${config.instructions || ''}`;
   }
   return `${type}:unknown`;
 };
@@ -142,10 +150,11 @@ export const ActivityLibrary: React.FC<ActivityLibraryProps> = ({
     if (!searchQuery.trim()) return true;
 
     const query = searchQuery.toLowerCase();
-    const name = a.name.toLowerCase();
-    const question = (a.config.question || '').toLowerCase();
-    const title = (a.config.title || '').toLowerCase();
-    const prompt = (a.config.prompt || '').toLowerCase();
+    const name = (a.name || '').toLowerCase();
+    const config = a.config || {};
+    const question = (config.question || '').toLowerCase();
+    const title = (config.title || '').toLowerCase();
+    const prompt = (config.prompt || '').toLowerCase();
 
     return name.includes(query) || question.includes(query) || title.includes(query) || prompt.includes(query);
   });
@@ -236,6 +245,20 @@ export const ActivityLibrary: React.FC<ActivityLibraryProps> = ({
             actConfig.url = cfg.url;
             actConfig.displayMode = cfg.displayMode;
             actConfig.fullScreen = cfg.fullScreen;
+          } else if (type === 'review-game') {
+            name = cfg.gameTitle?.slice(0, 50) || 'Review game';
+            actConfig.title = cfg.gameTitle;
+            actConfig.questions = cfg.gameQuestions;
+            actConfig.defaultTimeLimit = cfg.defaultTimeLimit;
+            actConfig.maxPoints = cfg.maxPoints;
+            actConfig.minPoints = cfg.minPoints;
+          } else if (type === 'submit-sample') {
+            name = cfg.instructions?.slice(0, 50) || 'Canvas activity';
+            actConfig.url = cfg.url;
+            actConfig.instructions = cfg.instructions;
+            actConfig.allowAnnotations = cfg.allowAnnotations;
+            actConfig.allowMultipleSubmissions = cfg.allowMultipleSubmissions;
+            actConfig.canvasSelector = cfg.canvasSelector;
           }
 
           // Create a hash to detect duplicates (based on type + key content)
@@ -328,14 +351,18 @@ export const ActivityLibrary: React.FC<ActivityLibraryProps> = ({
 
   // Get preview text for activity
   const getPreviewText = (activity: LibraryActivity): string => {
+    const config = activity.config || {};
     switch (activity.type) {
       case 'poll':
       case 'quiz':
-        return activity.config.question || 'No question';
+        return config.question || 'No question';
       case 'text-response':
-        return activity.config.prompt || 'No prompt';
+        return config.prompt || 'No prompt';
       case 'web-link':
-        return activity.config.title || activity.config.url || 'No title';
+        return config.title || config.url || 'No title';
+      case 'review-game':
+        const qCount = config.questions?.length || 0;
+        return `${config.title || 'Untitled'} (${qCount} question${qCount !== 1 ? 's' : ''})`;
       default:
         return '';
     }
@@ -343,9 +370,14 @@ export const ActivityLibrary: React.FC<ActivityLibraryProps> = ({
 
   // Get option count for polls/quizzes
   const getOptionInfo = (activity: LibraryActivity): string => {
+    const config = activity.config || {};
     if (activity.type === 'poll' || activity.type === 'quiz') {
-      const count = activity.config.options?.length || 0;
+      const count = config.options?.length || 0;
       return `${count} options`;
+    }
+    if (activity.type === 'review-game') {
+      const count = config.questions?.length || 0;
+      return `${count} questions`;
     }
     return '';
   };
@@ -414,13 +446,20 @@ export const ActivityLibrary: React.FC<ActivityLibraryProps> = ({
           </div>
         ) : (
           <>
-            {/* Create new button */}
-            <button
-              onClick={() => setShowCreateDialog(true)}
-              style={styles.createBtn}
-            >
-              + Create New {ACTIVITY_TYPES.find(t => t.type === activeTab)?.label.slice(0, -1)}
-            </button>
+            {/* Create new button - review games must be created from presentation builder */}
+            {activeTab === 'review-game' ? (
+              <div style={styles.reviewGameNotice}>
+                Review games must be created from the presentation builder.
+                Once saved to library, they'll appear here for reuse.
+              </div>
+            ) : (
+              <button
+                onClick={() => setShowCreateDialog(true)}
+                style={styles.createBtn}
+              >
+                + Create New {ACTIVITY_TYPES.find(t => t.type === activeTab)?.label.slice(0, -1)}
+              </button>
+            )}
 
             {/* Activity grid */}
             {filteredActivities.length === 0 ? (
@@ -690,6 +729,8 @@ const ActivityDialog: React.FC<ActivityDialogProps> = ({
   const [placeholder, setPlaceholder] = useState(existingActivity?.config.placeholder || '');
   const [title, setTitle] = useState(existingActivity?.config.title || '');
   const [url, setUrl] = useState(existingActivity?.config.url || '');
+  const [instructions, setInstructions] = useState(existingActivity?.config.instructions || '');
+  const [allowAnnotations, setAllowAnnotations] = useState(existingActivity?.config.allowAnnotations !== undefined ? existingActivity.config.allowAnnotations : true);
   const [isShared, setIsShared] = useState(existingActivity?.isShared || false);
   const [saving, setSaving] = useState(false);
 
@@ -722,6 +763,12 @@ const ActivityDialog: React.FC<ActivityDialogProps> = ({
         config.url = url;
         config.displayMode = 'iframe';
         config.fullScreen = false;
+      } else if (type === 'submit-sample') {
+        config.url = url;
+        config.instructions = instructions;
+        config.allowAnnotations = allowAnnotations;
+        config.allowMultipleSubmissions = false;
+        config.canvasSelector = 'canvas';
       }
 
       const now = Date.now();
@@ -892,6 +939,41 @@ const ActivityDialog: React.FC<ActivityDialogProps> = ({
           </>
         )}
 
+        {type === 'submit-sample' && (
+          <>
+            <div style={styles.formGroup}>
+              <label style={styles.label}>Activity URL</label>
+              <input
+                type="text"
+                value={url}
+                onChange={e => setUrl(e.target.value)}
+                placeholder="https://class-session-games.web.app/..."
+                style={styles.input}
+              />
+            </div>
+            <div style={styles.formGroup}>
+              <label style={styles.label}>Instructions</label>
+              <input
+                type="text"
+                value={instructions}
+                onChange={e => setInstructions(e.target.value)}
+                placeholder="What should students do?"
+                style={styles.input}
+              />
+            </div>
+            <div style={styles.formGroup}>
+              <label style={{ ...styles.label, display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <input
+                  type="checkbox"
+                  checked={allowAnnotations}
+                  onChange={e => setAllowAnnotations(e.target.checked)}
+                />
+                Allow Annotations
+              </label>
+            </div>
+          </>
+        )}
+
         {/* Shared toggle */}
         <div style={styles.formGroup}>
           <label style={{ ...styles.label, display: 'flex', alignItems: 'center', gap: '8px' }}>
@@ -930,7 +1012,7 @@ const ActivityDialog: React.FC<ActivityDialogProps> = ({
 // Helper to save an activity to the library
 export const saveToLibrary = async (
   activity: {
-    type: 'poll' | 'quiz' | 'text-response' | 'web-link' | 'review-game';
+    type: 'poll' | 'quiz' | 'text-response' | 'web-link' | 'review-game' | 'submit-sample';
     name: string;
     config: LibraryActivity['config'];
   },
@@ -1089,6 +1171,15 @@ const styles: Record<string, React.CSSProperties> = {
     padding: '40px',
     color: '#9ca3af',
     fontSize: '14px',
+  },
+  reviewGameNotice: {
+    padding: '12px 16px',
+    backgroundColor: '#fef3c7',
+    border: '1px solid #fcd34d',
+    borderRadius: '8px',
+    color: '#92400e',
+    fontSize: '14px',
+    lineHeight: '1.5',
   },
   createBtn: {
     display: 'inline-flex',

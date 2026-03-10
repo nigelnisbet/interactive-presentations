@@ -445,6 +445,11 @@ const ActivityBuilderInner: React.FC = () => {
           defaultTimeLimit: act.config?.defaultTimeLimit,
           maxPoints: act.config?.maxPoints,
           minPoints: act.config?.minPoints,
+          // Submit-sample fields
+          instructions: act.config?.instructions,
+          allowAnnotations: act.config?.allowAnnotations,
+          allowMultipleSubmissions: act.config?.allowMultipleSubmissions,
+          canvasSelector: act.config?.canvasSelector,
           // Library tracking fields
           sourceLibraryId: act.sourceLibraryId,
           copiedFromLibraryAt: act.copiedFromLibraryAt,
@@ -829,6 +834,10 @@ const ActivityBuilderInner: React.FC = () => {
             return { ...base, config: { type: 'quiz', question: activity.question, options: activity.options, correctAnswer: activity.correctAnswer, timeLimit: activity.timeLimit, showResults: activity.showResults, points: 100 } };
           } else if (activity.type === 'text-response') {
             return { ...base, config: { type: 'text-response', prompt: activity.prompt, placeholder: activity.placeholder, maxLength: activity.maxLength } };
+          } else if (activity.type === 'review-game') {
+            return { ...base, config: { type: 'review-game', title: (activity as any).gameTitle, questions: (activity as any).gameQuestions, defaultTimeLimit: (activity as any).defaultTimeLimit || 20, maxPoints: (activity as any).maxPoints || 1000, minPoints: (activity as any).minPoints || 100 } };
+          } else if (activity.type === 'submit-sample') {
+            return { ...base, config: { type: 'submit-sample', url: activity.url, instructions: activity.instructions, allowAnnotations: activity.allowAnnotations, allowMultipleSubmissions: activity.allowMultipleSubmissions, canvasSelector: activity.canvasSelector } };
           } else {
             return { ...base, config: { type: 'web-link', title: activity.title, description: activity.description, url: activity.url, displayMode: activity.displayMode, fullScreen: activity.fullScreen } };
           }
@@ -924,6 +933,18 @@ const ActivityBuilderInner: React.FC = () => {
               defaultTimeLimit: (activity as any).defaultTimeLimit || 20,
               maxPoints: (activity as any).maxPoints || 1000,
               minPoints: (activity as any).minPoints || 100,
+            },
+          };
+        } else if (activity.type === 'submit-sample') {
+          return {
+            ...base,
+            config: {
+              type: 'submit-sample',
+              url: activity.url,
+              instructions: activity.instructions,
+              allowAnnotations: activity.allowAnnotations,
+              allowMultipleSubmissions: activity.allowMultipleSubmissions,
+              canvasSelector: activity.canvasSelector,
             },
           };
         } else {

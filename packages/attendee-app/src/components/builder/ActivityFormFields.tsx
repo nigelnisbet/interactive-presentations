@@ -1,7 +1,7 @@
 import React from 'react';
 import { ReviewGameQuestionEditor, ReviewGameQuestionData } from './ReviewGameQuestionEditor';
 
-export type ActivityType = 'poll' | 'quiz' | 'web-link' | 'text-response' | 'review-game';
+export type ActivityType = 'poll' | 'quiz' | 'web-link' | 'text-response' | 'review-game' | 'submit-sample';
 
 export type ActivityFormData = {
   type: ActivityType;
@@ -35,6 +35,12 @@ export type ActivityFormData = {
   defaultTimeLimit?: number;
   maxPoints?: number;
   minPoints?: number;
+
+  // Submit-sample specific
+  instructions?: string;
+  allowAnnotations?: boolean;
+  allowMultipleSubmissions?: boolean;
+  canvasSelector?: string;
 };
 
 const generateQuestionId = () => `q-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`;
@@ -77,6 +83,18 @@ export const getDefaultActivity = (type: ActivityType = 'poll', indexh = 0, inde
       defaultTimeLimit: 20,
       maxPoints: 1000,
       minPoints: 100,
+    };
+  }
+  if (type === 'submit-sample') {
+    return {
+      type,
+      activityId: '',
+      slidePosition: { indexh, indexv },
+      url: '',
+      instructions: '',
+      allowAnnotations: true,
+      allowMultipleSubmissions: false,
+      canvasSelector: 'canvas',
     };
   }
   return {
@@ -132,6 +150,14 @@ export const validateActivity = (activity: ActivityFormData): string | null => {
         return `Question ${i + 1}: Valid correct answer must be selected`;
       }
     }
+  } else if (activity.type === 'submit-sample') {
+    if (!activity.url?.trim()) return 'Activity URL is required';
+    try {
+      new URL(activity.url);
+    } catch {
+      return 'Please enter a valid URL';
+    }
+    if (!activity.instructions?.trim()) return 'Instructions are required';
   }
 
   return null;
@@ -194,6 +220,7 @@ export const ActivityFormFields: React.FC<ActivityFormFieldsProps> = ({
           <option value="review-game">Review Game (Multi-Question Competition)</option>
           <option value="text-response">Open-Ended Text Response</option>
           <option value="web-link">Web Link / ST Math Game</option>
+          <option value="submit-sample">Submit Sample (Canvas Activity with Annotations)</option>
         </select>
       </label>
 
@@ -403,6 +430,67 @@ export const ActivityFormFields: React.FC<ActivityFormFieldsProps> = ({
             onChange={(questions) => onChange({ ...activity, gameQuestions: questions })}
             defaultTimeLimit={activity.defaultTimeLimit || 20}
           />
+        </>
+      )}
+
+      {/* Submit-sample Fields */}
+      {activity.type === 'submit-sample' && (
+        <>
+          <label style={styles.label}>
+            Activity URL
+            <small style={styles.hint}>URL of the canvas-based activity (e.g., fraction-builder)</small>
+            <input
+              type="url"
+              value={activity.url || ''}
+              onChange={(e) => onChange({ ...activity, url: e.target.value })}
+              placeholder="https://class-session-games.web.app/src/fraction-builder/index.html"
+              style={styles.input}
+            />
+          </label>
+
+          <label style={styles.label}>
+            Instructions
+            <small style={styles.hint}>What should students do in this activity?</small>
+            <input
+              type="text"
+              value={activity.instructions || ''}
+              onChange={(e) => onChange({ ...activity, instructions: e.target.value })}
+              placeholder="e.g., Build the fraction 2/3"
+              style={styles.input}
+            />
+          </label>
+
+          <label style={styles.checkboxLabel}>
+            <input
+              type="checkbox"
+              checked={activity.allowAnnotations || false}
+              onChange={(e) => onChange({ ...activity, allowAnnotations: e.target.checked })}
+              style={styles.checkbox}
+            />
+            Allow Annotations (drawing tools on top of canvas)
+          </label>
+
+          <label style={styles.checkboxLabel}>
+            <input
+              type="checkbox"
+              checked={activity.allowMultipleSubmissions || false}
+              onChange={(e) => onChange({ ...activity, allowMultipleSubmissions: e.target.checked })}
+              style={styles.checkbox}
+            />
+            Allow Multiple Submissions (students can update their work)
+          </label>
+
+          <label style={styles.label}>
+            Canvas Selector (Advanced)
+            <small style={styles.hint}>CSS selector for the canvas element (default: "canvas")</small>
+            <input
+              type="text"
+              value={activity.canvasSelector || ''}
+              onChange={(e) => onChange({ ...activity, canvasSelector: e.target.value })}
+              placeholder="canvas or #game-canvas"
+              style={styles.input}
+            />
+          </label>
         </>
       )}
 

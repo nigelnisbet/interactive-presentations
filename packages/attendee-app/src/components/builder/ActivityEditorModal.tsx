@@ -33,7 +33,7 @@ export const ActivityEditorModal: React.FC<ActivityEditorModalProps> = ({
   const [libraryActivities, setLibraryActivities] = useState<LibraryActivity[]>([]);
   const [loadingLibrary, setLoadingLibrary] = useState(false);
   const [librarySearch, setLibrarySearch] = useState('');
-  const [libraryFilter, setLibraryFilter] = useState<'all' | 'poll' | 'quiz' | 'text-response' | 'web-link'>('all');
+  const [libraryFilter, setLibraryFilter] = useState<'all' | 'poll' | 'quiz' | 'text-response' | 'web-link' | 'review-game' | 'submit-sample'>('all');
   const [savingToLibrary, setSavingToLibrary] = useState(false);
   const [libraryMessage, setLibraryMessage] = useState<string | null>(null);
   const [sourceLibraryActivity, setSourceLibraryActivity] = useState<LibraryActivity | null>(null);
@@ -189,6 +189,10 @@ export const ActivityEditorModal: React.FC<ActivityEditorModalProps> = ({
         name = activity.prompt?.slice(0, 50) || 'Text response';
       } else if (activity.type === 'web-link') {
         name = activity.title || activity.url?.slice(0, 50) || 'Web link';
+      } else if (activity.type === 'review-game') {
+        name = activity.gameTitle?.slice(0, 50) || 'Review game';
+      } else if (activity.type === 'submit-sample') {
+        name = activity.instructions?.slice(0, 50) || 'Canvas activity';
       }
 
       const config: LibraryActivity['config'] = {};
@@ -212,6 +216,18 @@ export const ActivityEditorModal: React.FC<ActivityEditorModalProps> = ({
         config.url = activity.url;
         config.displayMode = activity.displayMode;
         config.fullScreen = activity.fullScreen;
+      } else if (activity.type === 'review-game') {
+        config.title = activity.gameTitle;
+        config.questions = activity.gameQuestions;
+        config.defaultTimeLimit = activity.defaultTimeLimit;
+        config.maxPoints = activity.maxPoints;
+        config.minPoints = activity.minPoints;
+      } else if (activity.type === 'submit-sample') {
+        config.url = activity.url;
+        config.instructions = activity.instructions;
+        config.allowAnnotations = activity.allowAnnotations;
+        config.allowMultipleSubmissions = activity.allowMultipleSubmissions;
+        config.canvasSelector = activity.canvasSelector;
       }
 
       // Check if this activity came from library (has sourceLibraryId)
@@ -239,31 +255,44 @@ export const ActivityEditorModal: React.FC<ActivityEditorModalProps> = ({
     if (!sourceLibraryActivity) return;
 
     const libActivity = sourceLibraryActivity;
+    const config = libActivity.config || {};
     const updatedActivity: ActivityFormData & { sourceLibraryId?: string; copiedFromLibraryAt?: number } = {
       ...activity,
       sourceLibraryId: libActivity.id,
       copiedFromLibraryAt: Date.now(),
     };
 
-    // Update fields from library
+    // Update fields from library (with null safety)
     if (libActivity.type === 'poll' || libActivity.type === 'quiz') {
-      updatedActivity.question = libActivity.config.question || '';
-      updatedActivity.options = libActivity.config.options || ['', ''];
-      updatedActivity.showResults = libActivity.config.showResults || 'live';
+      updatedActivity.question = config.question || '';
+      updatedActivity.options = config.options || ['', ''];
+      updatedActivity.showResults = config.showResults || 'live';
       if (libActivity.type === 'quiz') {
-        updatedActivity.correctAnswer = libActivity.config.correctAnswer || 0;
-        updatedActivity.timeLimit = libActivity.config.timeLimit || 30;
+        updatedActivity.correctAnswer = config.correctAnswer || 0;
+        updatedActivity.timeLimit = config.timeLimit || 30;
       }
     } else if (libActivity.type === 'text-response') {
-      updatedActivity.prompt = libActivity.config.prompt || '';
-      updatedActivity.placeholder = libActivity.config.placeholder || '';
-      updatedActivity.maxLength = libActivity.config.maxLength || 500;
+      updatedActivity.prompt = config.prompt || '';
+      updatedActivity.placeholder = config.placeholder || '';
+      updatedActivity.maxLength = config.maxLength || 500;
     } else if (libActivity.type === 'web-link') {
-      updatedActivity.title = libActivity.config.title || '';
-      updatedActivity.description = libActivity.config.description || '';
-      updatedActivity.url = libActivity.config.url || '';
-      updatedActivity.displayMode = libActivity.config.displayMode || 'iframe';
-      updatedActivity.fullScreen = libActivity.config.fullScreen || false;
+      updatedActivity.title = config.title || '';
+      updatedActivity.description = config.description || '';
+      updatedActivity.url = config.url || '';
+      updatedActivity.displayMode = config.displayMode || 'iframe';
+      updatedActivity.fullScreen = config.fullScreen || false;
+    } else if (libActivity.type === 'review-game') {
+      updatedActivity.gameTitle = config.title || '';
+      updatedActivity.gameQuestions = config.questions || [];
+      updatedActivity.defaultTimeLimit = config.defaultTimeLimit || 20;
+      updatedActivity.maxPoints = config.maxPoints || 1000;
+      updatedActivity.minPoints = config.minPoints || 100;
+    } else if (libActivity.type === 'submit-sample') {
+      updatedActivity.url = config.url || '';
+      updatedActivity.instructions = config.instructions || '';
+      updatedActivity.allowAnnotations = config.allowAnnotations !== undefined ? config.allowAnnotations : true;
+      updatedActivity.allowMultipleSubmissions = config.allowMultipleSubmissions || false;
+      updatedActivity.canvasSelector = config.canvasSelector || 'canvas';
     }
 
     onActivityChange(updatedActivity);
@@ -274,33 +303,67 @@ export const ActivityEditorModal: React.FC<ActivityEditorModalProps> = ({
 
   // Select activity from library
   const handleSelectFromLibrary = (libActivity: LibraryActivity) => {
+    console.log('[ActivityEditorModal] Selecting from library:', {
+      type: libActivity.type,
+      id: libActivity.id,
+      name: libActivity.name,
+      config: libActivity.config,
+    });
+
+    // Get default activity for this type
+    const defaultActivity = getDefaultActivity(libActivity.type, slidePosition.indexh, slidePosition.indexv);
+
     const newActivity: ActivityFormData & { sourceLibraryId?: string; copiedFromLibraryAt?: number } = {
-      ...getDefaultActivity(libActivity.type, slidePosition.indexh, slidePosition.indexv),
+      ...defaultActivity,
+      type: libActivity.type, // Ensure type is explicitly set
       activityId: `${libActivity.type}-slide${slidePosition.indexh}-${Date.now().toString(36)}`,
       sourceLibraryId: libActivity.id,
       copiedFromLibraryAt: Date.now(),
     };
 
-    // Copy config fields
+    // Copy config fields (with null safety for config)
+    const config = libActivity.config || {};
     if (libActivity.type === 'poll' || libActivity.type === 'quiz') {
-      newActivity.question = libActivity.config.question || '';
-      newActivity.options = libActivity.config.options || ['', ''];
-      newActivity.showResults = libActivity.config.showResults || 'live';
+      newActivity.question = config.question || '';
+      newActivity.options = config.options || ['', ''];
+      newActivity.showResults = config.showResults || 'live';
       if (libActivity.type === 'quiz') {
-        newActivity.correctAnswer = libActivity.config.correctAnswer || 0;
-        newActivity.timeLimit = libActivity.config.timeLimit || 30;
+        newActivity.correctAnswer = config.correctAnswer || 0;
+        newActivity.timeLimit = config.timeLimit || 30;
       }
     } else if (libActivity.type === 'text-response') {
-      newActivity.prompt = libActivity.config.prompt || '';
-      newActivity.placeholder = libActivity.config.placeholder || '';
-      newActivity.maxLength = libActivity.config.maxLength || 500;
+      newActivity.prompt = config.prompt || '';
+      newActivity.placeholder = config.placeholder || '';
+      newActivity.maxLength = config.maxLength || 500;
     } else if (libActivity.type === 'web-link') {
-      newActivity.title = libActivity.config.title || '';
-      newActivity.description = libActivity.config.description || '';
-      newActivity.url = libActivity.config.url || '';
-      newActivity.displayMode = libActivity.config.displayMode || 'iframe';
-      newActivity.fullScreen = libActivity.config.fullScreen || false;
+      newActivity.title = config.title || '';
+      newActivity.description = config.description || '';
+      newActivity.url = config.url || '';
+      newActivity.displayMode = config.displayMode || 'iframe';
+      newActivity.fullScreen = config.fullScreen || false;
+    } else if (libActivity.type === 'review-game') {
+      newActivity.gameTitle = config.title || '';
+      // Use library questions if available, otherwise keep defaults from getDefaultActivity
+      newActivity.gameQuestions = (config.questions && config.questions.length > 0)
+        ? config.questions
+        : defaultActivity.gameQuestions || [];
+      newActivity.defaultTimeLimit = config.defaultTimeLimit || 20;
+      newActivity.maxPoints = config.maxPoints || 1000;
+      newActivity.minPoints = config.minPoints || 100;
+    } else if (libActivity.type === 'submit-sample') {
+      newActivity.url = config.url || '';
+      newActivity.instructions = config.instructions || '';
+      newActivity.allowAnnotations = config.allowAnnotations !== undefined ? config.allowAnnotations : true;
+      newActivity.allowMultipleSubmissions = config.allowMultipleSubmissions || false;
+      newActivity.canvasSelector = config.canvasSelector || 'canvas';
     }
+
+    console.log('[ActivityEditorModal] Created activity:', {
+      type: newActivity.type,
+      gameTitle: (newActivity as any).gameTitle,
+      gameQuestionsLength: (newActivity as any).gameQuestions?.length,
+      question: (newActivity as any).question,
+    });
 
     onActivityChange(newActivity);
     setMode('create');
@@ -318,24 +381,31 @@ export const ActivityEditorModal: React.FC<ActivityEditorModalProps> = ({
     if (!librarySearch.trim()) return true;
 
     const search = librarySearch.toLowerCase();
-    const name = a.name.toLowerCase();
-    const question = (a.config.question || '').toLowerCase();
-    const title = (a.config.title || '').toLowerCase();
-    const prompt = (a.config.prompt || '').toLowerCase();
+    const name = (a.name || '').toLowerCase();
+    const config = a.config || {};
+    const question = (config.question || '').toLowerCase();
+    const title = (config.title || '').toLowerCase();
+    const prompt = (config.prompt || '').toLowerCase();
 
     return name.includes(search) || question.includes(search) || title.includes(search) || prompt.includes(search);
   });
 
   // Get preview text for library activity
   const getPreviewText = (a: LibraryActivity): string => {
+    const config = a.config || {};
     switch (a.type) {
       case 'poll':
       case 'quiz':
-        return a.config.question || 'No question';
+        return config.question || 'No question';
       case 'text-response':
-        return a.config.prompt || 'No prompt';
+        return config.prompt || 'No prompt';
       case 'web-link':
-        return a.config.title || a.config.url || 'No title';
+        return config.title || config.url || 'No title';
+      case 'review-game':
+        const qCount = config.questions?.length || 0;
+        return `${config.title || 'Untitled'} (${qCount} question${qCount !== 1 ? 's' : ''})`;
+      case 'submit-sample':
+        return config.instructions || 'No instructions';
       default:
         return '';
     }
@@ -418,8 +488,10 @@ export const ActivityEditorModal: React.FC<ActivityEditorModalProps> = ({
                   <option value="all">All Types</option>
                   <option value="poll">Polls</option>
                   <option value="quiz">Quizzes</option>
+                  <option value="review-game">Review Games</option>
                   <option value="text-response">Text Responses</option>
                   <option value="web-link">Web Links</option>
+                  <option value="submit-sample">Canvas Activities</option>
                 </select>
               </div>
 
@@ -444,8 +516,10 @@ export const ActivityEditorModal: React.FC<ActivityEditorModalProps> = ({
                         <span style={styles.libraryItemType}>
                           {a.type === 'poll' && '📊'}
                           {a.type === 'quiz' && '❓'}
+                          {a.type === 'review-game' && '⭐'}
                           {a.type === 'text-response' && '💬'}
                           {a.type === 'web-link' && '🔗'}
+                          {a.type === 'submit-sample' && '🎨'}
                         </span>
                         <span style={styles.libraryItemName}>{a.name}</span>
                         {a.isShared && a.createdBy !== currentUserId && (

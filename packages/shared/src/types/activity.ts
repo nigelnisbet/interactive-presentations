@@ -7,7 +7,7 @@ export interface ActivityConfig {
   config: ActivityDefinition;
 }
 
-export type ActivityType = 'poll' | 'quiz' | 'stmath-game' | 'word-cloud' | 'web-link' | 'text-response' | 'review-game';
+export type ActivityType = 'poll' | 'quiz' | 'stmath-game' | 'word-cloud' | 'web-link' | 'text-response' | 'review-game' | 'submit-sample';
 
 export interface ActivityDefinition {
   type: ActivityType;
@@ -60,6 +60,15 @@ export interface TextResponseActivity extends ActivityDefinition {
   prompt: string;
   placeholder?: string;
   maxLength?: number;
+}
+
+export interface SubmitSampleActivity extends ActivityDefinition {
+  type: 'submit-sample';
+  url: string;
+  instructions: string;
+  allowAnnotations: boolean;
+  allowMultipleSubmissions: boolean;
+  canvasSelector?: string;
 }
 
 // Review Game types
@@ -140,7 +149,22 @@ export interface WordCloudResults {
   totalSubmissions: number;
 }
 
-export type ActivityResults = PollResults | QuizResults | WordCloudResults | ReviewGameResults;
+export interface SubmitSampleSubmission {
+  participantId: string;
+  participantName?: string;
+  imageUrl: string;
+  timestamp: Date;
+  version: number;
+}
+
+export interface SubmitSampleResults {
+  activityId: string;
+  instructions: string;
+  submissions: SubmitSampleSubmission[];
+  totalSubmissions: number;
+}
+
+export type ActivityResults = PollResults | QuizResults | WordCloudResults | ReviewGameResults | SubmitSampleResults;
 
 // Presentation configuration
 export interface PresentationConfig {

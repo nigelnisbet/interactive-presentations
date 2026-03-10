@@ -9,6 +9,8 @@ import { Quiz } from './components/activities/Quiz';
 import { WebLink } from './components/activities/WebLink';
 import { TextResponse } from './components/activities/TextResponse';
 import { ReviewGame } from './components/activities/ReviewGame';
+import { SubmitSample } from './components/activities/SubmitSample';
+import { SessionCodeBadge } from './components/SessionCodeBadge';
 import { SocketProvider, useSocket } from './contexts/FirebaseContext';
 
 const ActivityRouter: React.FC = () => {
@@ -39,27 +41,52 @@ const ActivityRouter: React.FC = () => {
 };
 
 const WaitingContent: React.FC = () => {
-  const { currentActivity, currentResults } = useSocket();
+  const { currentActivity, currentResults, sessionCode } = useSocket();
 
   // If there's an active activity, show it instead of waiting screen
   if (currentActivity) {
+    // Use activityId as key to force remounting when switching between activities
+    // This ensures component state (like selected answers) is reset between activities
+    const activityKey = currentActivity.activityId || `${currentActivity.type}-${Date.now()}`;
+
+    let activityComponent;
     switch (currentActivity.type) {
       case 'poll':
-        return <Poll activity={currentActivity as any} results={currentResults as any} />;
+        activityComponent = <Poll key={activityKey} activity={currentActivity as any} results={currentResults as any} />;
+        break;
       case 'quiz':
-        return <Quiz activity={currentActivity as any} />;
+        activityComponent = <Quiz key={activityKey} activity={currentActivity as any} />;
+        break;
       case 'web-link':
-        return <WebLink activity={currentActivity as any} />;
+        activityComponent = <WebLink key={activityKey} activity={currentActivity as any} />;
+        break;
       case 'text-response':
-        return <TextResponse activity={currentActivity as any} />;
+        activityComponent = <TextResponse key={activityKey} activity={currentActivity as any} />;
+        break;
       case 'review-game':
-        return <ReviewGame activity={currentActivity as any} />;
+        activityComponent = <ReviewGame key={activityKey} activity={currentActivity as any} />;
+        break;
+      case 'submit-sample':
+        activityComponent = <SubmitSample key={activityKey} activity={currentActivity as any} />;
+        break;
       default:
         return <WaitingScreen />;
     }
+
+    return (
+      <>
+        {sessionCode && <SessionCodeBadge code={sessionCode} />}
+        {activityComponent}
+      </>
+    );
   }
 
-  return <WaitingScreen />;
+  return (
+    <>
+      {sessionCode && <SessionCodeBadge code={sessionCode} />}
+      <WaitingScreen />
+    </>
+  );
 };
 
 const App: React.FC = () => {

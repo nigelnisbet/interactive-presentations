@@ -5,6 +5,7 @@ import { PollResults } from '../components/presenter/PollResults';
 import { QuizResults } from '../components/presenter/QuizResults';
 import { TextResponseResults } from '../components/presenter/TextResponseResults';
 import { ReviewGameResults } from '../components/presenter/ReviewGameResults';
+import { SubmitSampleResultsView } from '../components/presenter/SubmitSampleResults';
 
 // ST Math brand colors
 const stMathBlue = '#0077c8';
@@ -132,6 +133,7 @@ export const PresenterDashboard: React.FC = () => {
                     {currentActivity.type === 'web-link' && (currentActivity as any).title}
                     {currentActivity.type === 'text-response' && (currentActivity as any).prompt}
                     {currentActivity.type === 'review-game' && (currentActivity as any).title}
+                    {currentActivity.type === 'submit-sample' && (currentActivity as any).instructions}
                   </h2>
                 </div>
                 <div className="text-right">
@@ -169,6 +171,9 @@ export const PresenterDashboard: React.FC = () => {
             )}
             {currentActivity.type === 'review-game' && (
               <ReviewGameResults activity={currentActivity as any} />
+            )}
+            {currentActivity.type === 'submit-sample' && (
+              <SubmitSampleResultsView results={currentResults as any} />
             )}
           </div>
         )}

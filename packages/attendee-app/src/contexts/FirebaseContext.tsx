@@ -49,6 +49,11 @@ interface ReviewGameState {
   currentQuestionIndex: number;
   questionStartTime: number;
   responseCount?: number;  // Number of responses for current question
+  questionResults?: {
+    responses: number[];  // Count of responses for each option
+    totalResponses: number;
+    correctCount: number;
+  };
 }
 
 interface FirebaseContextType {
@@ -128,7 +133,8 @@ export const FirebaseProvider: React.FC<{ children: ReactNode }> = ({ children }
     const statusUnsub = onValue(sessionStatusRef, (snapshot) => {
       const status = snapshot.val();
       console.log('Session status:', status);
-      if (status === 'ended') {
+      // Handle both 'ended' status and complete session deletion (null)
+      if (status === 'ended' || status === null) {
         setError('Session has ended');
         setSessionEnded(true);
         setConnected(false);
@@ -322,10 +328,15 @@ export const FirebaseProvider: React.FC<{ children: ReactNode }> = ({ children }
 
     const responseRef = ref(database, `sessions/${sessionCode}/responses/${activityId}/${participantId}`);
 
-    // Check for duplicate response
-    const existingResponse = await get(responseRef);
-    if (existingResponse.exists()) {
-      throw new Error('Already responded to this activity');
+    // Check if this is a submit-sample activity (allows multiple submissions)
+    const isSubmitSample = answer && typeof answer === 'object' && 'imageUrl' in answer && 'version' in answer;
+
+    // Check for duplicate response (but allow submit-sample to overwrite)
+    if (!isSubmitSample) {
+      const existingResponse = await get(responseRef);
+      if (existingResponse.exists()) {
+        throw new Error('Already responded to this activity');
+      }
     }
 
     // Submit response
@@ -344,6 +355,46 @@ export const FirebaseProvider: React.FC<{ children: ReactNode }> = ({ children }
     const aggregatedRef = ref(database, `sessions/${code}/aggregatedResults/${activityId}`);
 
     await runTransaction(aggregatedRef, (current) => {
+      // Check if this is a submit-sample activity (answer has imageUrl property)
+      if (answer && typeof answer === 'object' && 'imageUrl' in answer) {
+        // For submit-sample activities, store submissions as an array
+        const submissions = current?.submissions || [];
+        const newSubmission: any = {
+          participantId: participantId || 'unknown',
+          imageUrl: answer.imageUrl,
+          timestamp: answer.timestamp || new Date().toISOString(),
+          version: answer.version || 1,
+        };
+
+        // Only include participantName if it exists (Firebase doesn't allow undefined)
+        if (participantName) {
+          newSubmission.participantName = participantName;
+        }
+
+        // Check if this participant already has a submission
+        const existingIndex = submissions.findIndex((s: any) => s.participantId === participantId);
+        let updatedSubmissions;
+        let isNewSubmission;
+
+        if (existingIndex >= 0) {
+          // Update existing submission
+          updatedSubmissions = [...submissions];
+          updatedSubmissions[existingIndex] = newSubmission;
+          isNewSubmission = false;
+        } else {
+          // Add new submission
+          updatedSubmissions = [...submissions, newSubmission];
+          isNewSubmission = true;
+        }
+
+        return {
+          submissions: updatedSubmissions,
+          totalSubmissions: isNewSubmission ? (current?.totalSubmissions || 0) + 1 : (current?.totalSubmissions || 0),
+          lastUpdated: Date.now()
+        };
+      }
+
+      // For poll/quiz activities, use the original logic
       if (!current) {
         // Initialize with the answer
         return {
@@ -498,13 +549,37 @@ export const FirebaseProvider: React.FC<{ children: ReactNode }> = ({ children }
     let allResponses: Record<string, any> = {};
 
     const emitCallback = () => {
-      // Calculate response count for current question
+      // Calculate response count and statistics for current question
       let stateWithResponseCount = currentState;
       if (currentState && currentActivity?.type === 'review-game') {
         const activity = currentActivity as any;
         const questionId = activity.questions?.[currentState.currentQuestionIndex]?.id;
-        const questionResponses = questionId && allResponses[questionId] ? Object.keys(allResponses[questionId]).length : 0;
-        stateWithResponseCount = { ...currentState, responseCount: questionResponses };
+        const currentQuestion = activity.questions?.[currentState.currentQuestionIndex];
+        const questionResponsesData = questionId && allResponses[questionId] ? allResponses[questionId] : {};
+        const questionResponses = Object.keys(questionResponsesData).length;
+
+        // Aggregate responses by option
+        const responses: number[] = currentQuestion?.options ? Array(currentQuestion.options.length).fill(0) : [];
+        let correctCount = 0;
+
+        Object.values(questionResponsesData).forEach((response: any) => {
+          if (typeof response.answer === 'number' && response.answer >= 0 && response.answer < responses.length) {
+            responses[response.answer]++;
+            if (response.isCorrect) {
+              correctCount++;
+            }
+          }
+        });
+
+        stateWithResponseCount = {
+          ...currentState,
+          responseCount: questionResponses,
+          questionResults: {
+            responses,
+            totalResponses: questionResponses,
+            correctCount,
+          },
+        };
       }
       callback(stateWithResponseCount, currentLeaderboard, reviewGameParticipantCount);
     };
