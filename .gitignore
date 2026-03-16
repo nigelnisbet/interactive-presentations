@@ -5,6 +5,11 @@ package-lock.json
 # Build outputs
 dist/
 build/
+dist-deploy/
+*.zip
+
+# Firebase
+.firebase/
 
 # Environment files
 .env

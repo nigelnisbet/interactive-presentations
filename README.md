@@ -1,15 +1,22 @@
 # Interactive Presentations
 
-Turn your slides.com presentations into interactive experiences! Attendees join via QR code and participate in polls, quizzes, and games as you present.
+Transform your Google Slides presentations into interactive, real-time experiences! Attendees join via QR code and participate in polls, quizzes, and ST Math games as you present.
 
-## Architecture
+## 🏗️ Architecture
 
-- **Chrome Extension**: Detects slide changes in your slides.com presentation
-- **Backend Server**: Real-time communication via Socket.IO
-- **Attendee Web App**: Mobile-friendly interface for participants
-- **Shared Types**: TypeScript types used across all components
+**Current Stack (Firebase-based):**
+- **Chrome Extension** - Detects slide changes in Google Slides
+- **Firebase Realtime Database** - Real-time sync between presenter and attendees
+- **Firebase Storage** - Student work submissions and uploads
+- **Attendee/Presenter Web App** - Mobile-friendly interface for participants
+- **Activity Builder** - Visual interface to create activities
+- **Shared Types** - TypeScript types used across all components
 
-## Quick Start
+## 🚀 Quick Start
+
+### Prerequisites
+- Node.js 18+ and npm
+- Firebase project configured
 
 ### 1. Install Dependencies
 
@@ -17,113 +24,112 @@ Turn your slides.com presentations into interactive experiences! Attendees join 
 npm install
 ```
 
-### 2. Start Redis
-
-```bash
-docker-compose up -d
-```
-
-### 3. Start Development Servers
+### 2. Start Development
 
 ```bash
 npm run dev
 ```
 
-This will start:
-- Backend server on `http://localhost:3000`
+This starts:
 - Attendee app on `http://localhost:5173`
 - Extension build in watch mode
 
-### 4. Load Chrome Extension
+### 3. Load Chrome Extension
 
-1. Open Chrome and navigate to `chrome://extensions`
-2. Enable "Developer mode" (toggle in top right)
+1. Open Chrome → `chrome://extensions`
+2. Enable "Developer mode"
 3. Click "Load unpacked"
-4. Select the `packages/extension/dist` directory
+4. Select `packages/extension/dist` directory
 
-## Usage
+## 📖 Documentation
+
+Full documentation available in [docs/](docs/):
+- [Getting Started Guide](docs/guides/GETTING_STARTED.md)
+- [Adding Activity Types](docs/guides/ADDING_NEW_ACTIVITY_TYPES.md)
+- [Deployment Guide](docs/guides/PRODUCTION_DEPLOYMENT.md)
+- [Activity Documentation](docs/activities/)
+
+## 🎯 Usage
 
 ### Creating a Session
 
-1. Open your slides.com presentation in Chrome
-2. Click the extension icon in your toolbar
-3. Click "Create Session"
-4. Share the QR code or session code with attendees
+1. Open Google Slides presentation
+2. Click extension icon
+3. Click "Start Session"
+4. Share QR code with attendees
 
-### Joining as an Attendee
+### Joining as Attendee
 
-1. Scan the QR code or visit the attendee app
-2. Enter the session code
-3. Wait for interactive activities to appear
+1. Scan QR code or visit attendee app
+2. Automatically joins session
+3. Participate in activities as they appear
 
-### Configuring Activities
+### Creating Activities
 
-Create a JSON file at `packages/server/activities/{your-presentation-id}/config.json`:
+Use the Activity Builder at `/builder` or manually create JSON configs.
 
-```json
-{
-  "presentationId": "my-presentation",
-  "title": "My Awesome Presentation",
-  "activities": [
-    {
-      "slidePosition": { "indexh": 2, "indexv": 0 },
-      "activityType": "poll",
-      "activityId": "poll-1",
-      "config": {
-        "type": "poll",
-        "question": "What's your favorite feature?",
-        "options": ["Polls", "Quizzes", "Games"],
-        "allowMultiple": false,
-        "showResults": "live"
-      }
-    }
-  ]
-}
-```
-
-## Project Structure
+## 📦 Project Structure
 
 ```
-presentations/
+interactive-presentations/
 ├── packages/
-│   ├── shared/          # Shared TypeScript types
-│   ├── server/          # Backend server (Express + Socket.IO)
-│   ├── attendee-app/    # React web app for participants
-│   └── extension/       # Chrome extension
-├── docker-compose.yml   # Redis container
-└── package.json         # Monorepo configuration
+│   ├── shared/                 # Shared TypeScript types
+│   ├── attendee-app/           # React web app (attendee + presenter + builder)
+│   ├── extension/              # Chrome extension for regular slides
+│   ├── extension-google-slides/# Chrome extension for Google Slides
+│   └── sample-activities/      # Canvas-based activity templates
+├── docs/                       # Documentation
+└── package.json                # Monorepo configuration
 ```
 
-## Development
-
-### Building Individual Packages
+## 🛠️ Building
 
 ```bash
 npm run build:shared      # Build shared types
-npm run build:server      # Build backend
 npm run build:app         # Build attendee app
 npm run build:extension   # Build extension
 ```
 
+## 🌐 Deployment
+
+- **Attendee App**: Hosted at presentations.stmath.com
+- **Activity Builder**: Available at presentations.stmath.com/builder
+- **Chrome Extension**: Load unpacked for development, package for distribution
+
+See [Deployment Guide](docs/guides/PRODUCTION_DEPLOYMENT.md) for details.
+
+## 🎮 Activity Types
+
+- **Poll** - Multiple choice questions with live results
+- **Quiz** - Timed questions with scoring and leaderboards
+- **Text Response** - Open-ended questions
+- **Review Game** - Kahoot-style competitive quiz
+- **Submit-Sample** - Canvas-based student work with annotations
+- **ST Math Games** - Embedded games via iframe
+- **Trillionaire** - Collaborative tap game
+
+## 🔧 Development
+
 ### Environment Variables
 
-Create `packages/server/.env`:
+Create `packages/attendee-app/.env.local`:
 
 ```env
-PORT=3000
-REDIS_URL=redis://localhost:6379
-ATTENDEE_APP_URL=http://localhost:5173
-NODE_ENV=development
+VITE_FIREBASE_API_KEY=your_key_here
+VITE_FIREBASE_AUTH_DOMAIN=your_domain
+VITE_FIREBASE_PROJECT_ID=your_project
+# ... other Firebase config
 ```
 
-## Testing
+### Building Individual Packages
 
-See the plan file for detailed end-to-end testing steps.
+Each package can be built independently:
 
-## Future Enhancements
+```bash
+cd packages/attendee-app && npm run build
+cd packages/extension && npm run build
+```
 
-- PostgreSQL for session persistence and analytics
-- Web-based activity configuration UI
-- Advanced activity types (word clouds, drawings, team challenges)
-- Presenter dashboard with real-time analytics
-- Results export (CSV/PDF)
+## 📝 License
+
+Private project for ST Math educational content.
