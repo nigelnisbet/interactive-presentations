@@ -20,7 +20,7 @@ if [ -z "$PRES_ID" ]; then
 fi
 
 # Create directory
-DIR="packages/server/activities/${test-interactive}"
+DIR="packages/server/activities/${PRES_ID}"
 mkdir -p "$DIR"
 
 # Create config
