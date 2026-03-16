@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
   ReviewGameActivity,
   ReviewGamePhase,
@@ -44,6 +44,7 @@ export const ReviewGame: React.FC<ReviewGameProps> = ({ activity }) => {
   const [myResponses, setMyResponses] = useState<Map<string, MyResponse>>(new Map());
   const [timeLeft, setTimeLeft] = useState<number | null>(null);
   const [showNameModal, setShowNameModal] = useState(!participantName);
+  const lastQuestionIdRef = useRef<string | null>(null);
 
   // Auto-join if participant already has a name
   useEffect(() => {
@@ -85,10 +86,12 @@ export const ReviewGame: React.FC<ReviewGameProps> = ({ activity }) => {
       setGameState(state);
       setLeaderboard(lb || []);
 
-      // Reset answer state when moving to new question
+      // Reset answer state ONLY when moving to a NEW question
       if (state?.gamePhase === 'question') {
         const qId = activity.questions[state.currentQuestionIndex]?.id;
-        if (qId && !myResponses.has(qId)) {
+        if (qId && qId !== lastQuestionIdRef.current) {
+          console.log('New review game question detected, resetting state');
+          lastQuestionIdRef.current = qId;
           setSelectedAnswer(null);
           setHasSubmitted(false);
         }

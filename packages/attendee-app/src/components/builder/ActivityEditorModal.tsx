@@ -33,7 +33,7 @@ export const ActivityEditorModal: React.FC<ActivityEditorModalProps> = ({
   const [libraryActivities, setLibraryActivities] = useState<LibraryActivity[]>([]);
   const [loadingLibrary, setLoadingLibrary] = useState(false);
   const [librarySearch, setLibrarySearch] = useState('');
-  const [libraryFilter, setLibraryFilter] = useState<'all' | 'poll' | 'quiz' | 'text-response' | 'web-link' | 'review-game' | 'submit-sample'>('all');
+  const [libraryFilter, setLibraryFilter] = useState<'all' | 'poll' | 'quiz' | 'text-response' | 'web-link' | 'review-game' | 'submit-sample' | 'collaborative-tap-game'>('all');
   const [savingToLibrary, setSavingToLibrary] = useState(false);
   const [libraryMessage, setLibraryMessage] = useState<string | null>(null);
   const [sourceLibraryActivity, setSourceLibraryActivity] = useState<LibraryActivity | null>(null);
@@ -310,12 +310,36 @@ export const ActivityEditorModal: React.FC<ActivityEditorModalProps> = ({
       config: libActivity.config,
     });
 
-    // Get default activity for this type
-    const defaultActivity = getDefaultActivity(libActivity.type, slidePosition.indexh, slidePosition.indexv);
+    // Special handling for collaborative-tap-game (library-only, non-editable)
+    if (libActivity.type === 'collaborative-tap-game') {
+      const config = libActivity.config || {};
+      const gameActivity = {
+        type: 'collaborative-tap-game' as const,
+        activityId: `${libActivity.type}-slide${slidePosition.indexh}-${Date.now().toString(36)}`,
+        slidePosition: {
+          indexh: slidePosition.indexh,
+          indexv: slidePosition.indexv,
+        },
+        sourceLibraryId: libActivity.id,
+        copiedFromLibraryAt: Date.now(),
+        // Only spread defined fields from config
+        title: config.title || '',
+        question: config.question || '',
+        linearIncrement: config.linearIncrement || 1000000,
+        cooldownSeconds: config.cooldownSeconds || 3,
+        winCondition: config.winCondition || 1000000000000,
+      };
+      onActivityChange(gameActivity as any);
+      setMode('create'); // Switch to create mode to show Add Activity button
+      return;
+    }
+
+    // Get default activity for this type (for editable types)
+    const defaultActivity = getDefaultActivity(libActivity.type as any, slidePosition.indexh, slidePosition.indexv);
 
     const newActivity: ActivityFormData & { sourceLibraryId?: string; copiedFromLibraryAt?: number } = {
       ...defaultActivity,
-      type: libActivity.type, // Ensure type is explicitly set
+      type: libActivity.type as any, // Ensure type is explicitly set
       activityId: `${libActivity.type}-slide${slidePosition.indexh}-${Date.now().toString(36)}`,
       sourceLibraryId: libActivity.id,
       copiedFromLibraryAt: Date.now(),
@@ -406,6 +430,8 @@ export const ActivityEditorModal: React.FC<ActivityEditorModalProps> = ({
         return `${config.title || 'Untitled'} (${qCount} question${qCount !== 1 ? 's' : ''})`;
       case 'submit-sample':
         return config.instructions || 'No instructions';
+      case 'collaborative-tap-game':
+        return config.question || config.title || 'Interactive tap game';
       default:
         return '';
     }
@@ -492,6 +518,7 @@ export const ActivityEditorModal: React.FC<ActivityEditorModalProps> = ({
                   <option value="text-response">Text Responses</option>
                   <option value="web-link">Web Links</option>
                   <option value="submit-sample">Canvas Activities</option>
+                  <option value="collaborative-tap-game">Interactive Games</option>
                 </select>
               </div>
 
@@ -520,6 +547,7 @@ export const ActivityEditorModal: React.FC<ActivityEditorModalProps> = ({
                           {a.type === 'text-response' && '💬'}
                           {a.type === 'web-link' && '🔗'}
                           {a.type === 'submit-sample' && '🎨'}
+                          {a.type === 'collaborative-tap-game' && '💰'}
                         </span>
                         <span style={styles.libraryItemName}>{a.name}</span>
                         {a.isShared && a.createdBy !== currentUserId && (

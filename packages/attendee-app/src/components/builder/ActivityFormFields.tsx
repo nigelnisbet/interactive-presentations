@@ -158,6 +158,9 @@ export const validateActivity = (activity: ActivityFormData): string | null => {
       return 'Please enter a valid URL';
     }
     if (!activity.instructions?.trim()) return 'Instructions are required';
+  } else if ((activity as any).type === 'collaborative-tap-game') {
+    // collaborative-tap-game comes from library with all config, no validation needed
+    return null;
   }
 
   return null;

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { QuizActivity } from '@interactive-presentations/shared';
 import { useSocket } from '../../contexts/FirebaseContext';
 
@@ -22,6 +22,19 @@ export const Quiz: React.FC<QuizProps> = ({ activity }) => {
     activity.timeLimit ? activity.timeLimit : null
   );
   const { submitResponse } = useSocket();
+  const lastActivityIdRef = useRef<string | undefined>(activity.activityId);
+
+  // Reset state ONLY when activityId actually changes (new question)
+  useEffect(() => {
+    if (lastActivityIdRef.current !== activity.activityId) {
+      console.log('New quiz question detected, resetting state');
+      lastActivityIdRef.current = activity.activityId;
+      setSelectedOption(null);
+      setSubmitted(false);
+      setResult(null);
+      setTimeLeft(activity.timeLimit ? activity.timeLimit : null);
+    }
+  }, [activity.activityId, activity.timeLimit]);
 
   useEffect(() => {
     if (!activity.timeLimit || submitted) return;
@@ -197,7 +210,7 @@ export const Quiz: React.FC<QuizProps> = ({ activity }) => {
               boxShadow: selectedOption === null ? undefined : '0 4px 14px rgba(247, 148, 29, 0.4)',
             }}
           >
-            Submit Answer
+            Lock In Answer
           </button>
         ) : (
           <div className="text-center">

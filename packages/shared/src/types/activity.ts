@@ -7,7 +7,7 @@ export interface ActivityConfig {
   config: ActivityDefinition;
 }
 
-export type ActivityType = 'poll' | 'quiz' | 'stmath-game' | 'word-cloud' | 'web-link' | 'text-response' | 'review-game' | 'submit-sample';
+export type ActivityType = 'poll' | 'quiz' | 'stmath-game' | 'word-cloud' | 'web-link' | 'text-response' | 'review-game' | 'submit-sample' | 'collaborative-tap-game';
 
 export interface ActivityDefinition {
   type: ActivityType;
@@ -69,6 +69,17 @@ export interface SubmitSampleActivity extends ActivityDefinition {
   allowAnnotations: boolean;
   allowMultipleSubmissions: boolean;
   canvasSelector?: string;
+}
+
+export type TapGameMode = 'linear' | 'exponential';
+
+export interface CollaborativeTapGameActivity extends ActivityDefinition {
+  type: 'collaborative-tap-game';
+  title: string;
+  question: string;
+  linearIncrement: number;      // Amount added per tap in linear mode
+  cooldownSeconds: number;       // Cooldown between taps
+  winCondition: number;          // Target amount to win
 }
 
 // Review Game types
@@ -164,7 +175,18 @@ export interface SubmitSampleResults {
   totalSubmissions: number;
 }
 
-export type ActivityResults = PollResults | QuizResults | WordCloudResults | ReviewGameResults | SubmitSampleResults;
+export interface CollaborativeTapGameResults {
+  activityId: string;
+  title: string;
+  currentMode: TapGameMode;
+  currentTotal: number;
+  isActive: boolean;
+  isWinner: boolean;
+  participantCount: number;
+  tapCount: number;
+}
+
+export type ActivityResults = PollResults | QuizResults | WordCloudResults | ReviewGameResults | SubmitSampleResults | CollaborativeTapGameResults;
 
 // Presentation configuration
 export interface PresentationConfig {

@@ -5,7 +5,7 @@ import { database } from './firebaseConfig';
 // Library activity stored in Firebase
 export interface LibraryActivity {
   id: string;
-  type: 'poll' | 'quiz' | 'text-response' | 'web-link' | 'review-game' | 'submit-sample';
+  type: 'poll' | 'quiz' | 'text-response' | 'web-link' | 'review-game' | 'submit-sample' | 'collaborative-tap-game';
   name: string;
   config: {
     // Poll/Quiz fields
@@ -40,6 +40,10 @@ export interface LibraryActivity {
     allowAnnotations?: boolean;
     allowMultipleSubmissions?: boolean;
     canvasSelector?: string;
+    // Collaborative-tap-game fields
+    linearIncrement?: number;
+    cooldownSeconds?: number;
+    winCondition?: number;
   };
   createdBy: string;
   createdAt: number;
@@ -54,7 +58,7 @@ interface ActivityLibraryProps {
   mode: 'browse' | 'pick'; // browse = standalone page, pick = picker in modal
 }
 
-type ActivityType = 'poll' | 'quiz' | 'text-response' | 'web-link' | 'review-game' | 'submit-sample';
+type ActivityType = 'poll' | 'quiz' | 'text-response' | 'web-link' | 'review-game' | 'submit-sample' | 'collaborative-tap-game';
 
 const ACTIVITY_TYPES: { type: ActivityType; label: string; icon: string }[] = [
   { type: 'poll', label: 'Polls', icon: '📊' },
@@ -63,6 +67,7 @@ const ACTIVITY_TYPES: { type: ActivityType; label: string; icon: string }[] = [
   { type: 'text-response', label: 'Text Responses', icon: '💬' },
   { type: 'web-link', label: 'Web Links', icon: '🔗' },
   { type: 'submit-sample', label: 'Canvas Activities', icon: '🎨' },
+  { type: 'collaborative-tap-game', label: 'Interactive Games', icon: '💰' },
 ];
 
 // Generate a hash for duplicate detection based on activity content
@@ -79,6 +84,8 @@ const generateActivityHash = (type: ActivityType, config: LibraryActivity['confi
     return `${type}:${config.title || ''}:${qs}`;
   } else if (type === 'submit-sample') {
     return `${type}:${config.url || ''}:${config.instructions || ''}`;
+  } else if (type === 'collaborative-tap-game') {
+    return `${type}:${config.title || ''}:${config.winCondition || ''}`;
   }
   return `${type}:unknown`;
 };
@@ -363,6 +370,10 @@ export const ActivityLibrary: React.FC<ActivityLibraryProps> = ({
       case 'review-game':
         const qCount = config.questions?.length || 0;
         return `${config.title || 'Untitled'} (${qCount} question${qCount !== 1 ? 's' : ''})`;
+      case 'submit-sample':
+        return config.instructions || 'No instructions';
+      case 'collaborative-tap-game':
+        return config.question || config.title || 'Collaborative game';
       default:
         return '';
     }
@@ -378,6 +389,9 @@ export const ActivityLibrary: React.FC<ActivityLibraryProps> = ({
     if (activity.type === 'review-game') {
       const count = config.questions?.length || 0;
       return `${count} questions`;
+    }
+    if (activity.type === 'collaborative-tap-game') {
+      return 'Interactive tap game';
     }
     return '';
   };
@@ -1012,7 +1026,7 @@ const ActivityDialog: React.FC<ActivityDialogProps> = ({
 // Helper to save an activity to the library
 export const saveToLibrary = async (
   activity: {
-    type: 'poll' | 'quiz' | 'text-response' | 'web-link' | 'review-game' | 'submit-sample';
+    type: 'poll' | 'quiz' | 'text-response' | 'web-link' | 'review-game' | 'submit-sample' | 'collaborative-tap-game';
     name: string;
     config: LibraryActivity['config'];
   },

@@ -10,6 +10,7 @@ import { WebLink } from './components/activities/WebLink';
 import { TextResponse } from './components/activities/TextResponse';
 import { ReviewGame } from './components/activities/ReviewGame';
 import { SubmitSample } from './components/activities/SubmitSample';
+import { CollaborativeTapGame } from './components/activities/CollaborativeTapGame';
 import { SessionCodeBadge } from './components/SessionCodeBadge';
 import { SocketProvider, useSocket } from './contexts/FirebaseContext';
 
@@ -68,6 +69,9 @@ const WaitingContent: React.FC = () => {
         break;
       case 'submit-sample':
         activityComponent = <SubmitSample key={activityKey} activity={currentActivity as any} />;
+        break;
+      case 'collaborative-tap-game':
+        activityComponent = <CollaborativeTapGame key={activityKey} activity={currentActivity as any} results={currentResults as any} />;
         break;
       default:
         return <WaitingScreen />;

@@ -1,0 +1,28 @@
+[
+  {
+    "activityId": "submit-sample-demo-1",
+    "slidePosition": { "indexh": 5, "indexv": 0 },
+    "config": {
+      "type": "submit-sample",
+      "activityId": "submit-sample-demo-1",
+      "url": "http://localhost:5174/src/demo-canvas/index.html",
+      "instructions": "Create a colorful pattern by clicking on the canvas",
+      "allowAnnotations": true,
+      "allowMultipleSubmissions": true,
+      "canvasSelector": "#game-canvas"
+    }
+  },
+  {
+    "activityId": "submit-sample-math-1",
+    "slidePosition": { "indexh": 6, "indexv": 0 },
+    "config": {
+      "type": "submit-sample",
+      "activityId": "submit-sample-math-1",
+      "url": "https://visual-first-math.web.app/your-activity-here",
+      "instructions": "Solve the problem and show your work",
+      "allowAnnotations": true,
+      "allowMultipleSubmissions": false,
+      "canvasSelector": "canvas"
+    }
+  }
+]

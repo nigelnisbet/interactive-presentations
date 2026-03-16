@@ -1,0 +1,28 @@
+[
+  {
+    "activityId": "fraction-builder-1",
+    "slidePosition": { "indexh": 7, "indexv": 0 },
+    "config": {
+      "type": "submit-sample",
+      "activityId": "fraction-builder-1",
+      "url": "http://localhost:5174/src/fraction-builder/index.html",
+      "instructions": "Build the fraction 2/3",
+      "allowAnnotations": true,
+      "allowMultipleSubmissions": false,
+      "canvasSelector": "#game-canvas"
+    }
+  },
+  {
+    "activityId": "fraction-builder-2",
+    "slidePosition": { "indexh": 8, "indexv": 0 },
+    "config": {
+      "type": "submit-sample",
+      "activityId": "fraction-builder-2",
+      "url": "http://localhost:5174/src/fraction-builder/index.html",
+      "instructions": "Build the fraction 5/8",
+      "allowAnnotations": true,
+      "allowMultipleSubmissions": true,
+      "canvasSelector": "#game-canvas"
+    }
+  }
+]

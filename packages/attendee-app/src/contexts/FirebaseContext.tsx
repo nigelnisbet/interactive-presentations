@@ -78,6 +78,8 @@ interface FirebaseContextType {
   revealAnswer?: (activityId: string) => Promise<void>;
   nextQuestion?: (activityId: string, totalQuestions: number) => Promise<void>;
   endReviewGame?: (activityId: string) => Promise<void>;
+  // Generic activity update for presenter controls
+  updateActivity?: (activityId: string, updates: Partial<ActivityResults>) => Promise<void>;
 }
 
 const FirebaseContext = createContext<FirebaseContextType | undefined>(undefined);
@@ -331,8 +333,11 @@ export const FirebaseProvider: React.FC<{ children: ReactNode }> = ({ children }
     // Check if this is a submit-sample activity (allows multiple submissions)
     const isSubmitSample = answer && typeof answer === 'object' && 'imageUrl' in answer && 'version' in answer;
 
-    // Check for duplicate response (but allow submit-sample to overwrite)
-    if (!isSubmitSample) {
+    // Check if this is a collaborative-tap-game tap (allows multiple taps)
+    const isTapGame = answer && typeof answer === 'object' && 'action' in answer && answer.action === 'tap';
+
+    // Check for duplicate response (but allow submit-sample and tap-game to submit multiple times)
+    if (!isSubmitSample && !isTapGame) {
       const existingResponse = await get(responseRef);
       if (existingResponse.exists()) {
         throw new Error('Already responded to this activity');
@@ -354,7 +359,58 @@ export const FirebaseProvider: React.FC<{ children: ReactNode }> = ({ children }
   const updateAggregatedResults = async (code: string, activityId: string, answer: any) => {
     const aggregatedRef = ref(database, `sessions/${code}/aggregatedResults/${activityId}`);
 
+    // Get current activity to check its configuration
+    const activityRef = ref(database, `sessions/${code}/currentActivity`);
+    const activitySnapshot = await get(activityRef);
+    const activity = activitySnapshot.val();
+
     await runTransaction(aggregatedRef, (current) => {
+      // Check if this is a collaborative-tap-game activity
+      if (answer && typeof answer === 'object' && 'action' in answer && answer.action === 'tap') {
+        // Initialize if first tap
+        if (!current) {
+          return {
+            activityId,
+            title: activity?.title || 'Collaborative Tap Game',
+            currentMode: 'linear',
+            currentTotal: 0,
+            isActive: false,
+            isWinner: false,
+            tapCount: 0,
+          };
+        }
+
+        // Only process taps if game is active
+        if (!current.isActive) {
+          return current; // No change if game not active
+        }
+
+        // Update tap game state
+        const currentMode = current.currentMode || 'linear';
+        const linearIncrement = activity?.linearIncrement || 1000000;
+        const winCondition = activity?.winCondition || 1000000000000;
+
+        let newTotal = current.currentTotal || 0;
+
+        // Calculate new total based on mode
+        if (currentMode === 'linear') {
+          newTotal += linearIncrement;
+        } else if (currentMode === 'exponential') {
+          newTotal = newTotal === 0 ? 1 : newTotal * 2;
+        }
+
+        // Check win condition
+        const isWinner = newTotal >= winCondition;
+
+        return {
+          ...current,
+          currentTotal: newTotal,
+          isWinner: isWinner || current.isWinner, // Once won, stay won
+          isActive: isWinner ? false : current.isActive, // Stop if won
+          tapCount: (current.tapCount || 0) + 1,
+        };
+      }
+
       // Check if this is a submit-sample activity (answer has imageUrl property)
       if (answer && typeof answer === 'object' && 'imageUrl' in answer) {
         // For submit-sample activities, store submissions as an array
@@ -715,6 +771,15 @@ export const FirebaseProvider: React.FC<{ children: ReactNode }> = ({ children }
     await set(leaderboardRef, entries);
   };
 
+  const updateActivity = useCallback(async (activityId: string, updates: Partial<ActivityResults>): Promise<void> => {
+    if (!sessionCode) {
+      throw new Error('Not in a session');
+    }
+
+    const aggregatedRef = ref(database, `sessions/${sessionCode}/aggregatedResults/${activityId}`);
+    await update(aggregatedRef, updates);
+  }, [sessionCode]);
+
   const leaveSession = useCallback(() => {
     if (sessionCode && participantId) {
       // Mark as inactive
@@ -758,6 +823,7 @@ export const FirebaseProvider: React.FC<{ children: ReactNode }> = ({ children }
         revealAnswer,
         nextQuestion,
         endReviewGame,
+        updateActivity,
       }}
     >
       {children}

@@ -1,0 +1,944 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Word Cloud Test Harness</title>
+  <style>
+    body {
+      margin: 0;
+      padding: 20px;
+      font-family: system-ui, -apple-system, sans-serif;
+      background: #f5f5f5;
+    }
+    .container {
+      max-width: 1200px;
+      margin: 0 auto;
+    }
+    .controls {
+      background: white;
+      padding: 20px;
+      border-radius: 12px;
+      margin-bottom: 20px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+    }
+    .controls h2 {
+      margin: 0 0 15px 0;
+      font-size: 18px;
+    }
+    .button-group {
+      display: flex;
+      gap: 10px;
+      margin-bottom: 15px;
+    }
+    button {
+      padding: 10px 20px;
+      border: none;
+      border-radius: 8px;
+      background: #0077c8;
+      color: white;
+      font-weight: 600;
+      cursor: pointer;
+      transition: background 0.2s;
+    }
+    button:hover {
+      background: #005a9c;
+    }
+    button:disabled {
+      background: #ccc;
+      cursor: not-allowed;
+    }
+    .slider-group {
+      margin-bottom: 15px;
+    }
+    .slider-group label {
+      display: block;
+      margin-bottom: 5px;
+      font-size: 14px;
+      color: #333;
+    }
+    input[type="range"] {
+      width: 100%;
+    }
+    .stats {
+      display: flex;
+      gap: 20px;
+      font-size: 14px;
+      color: #666;
+      margin-top: 10px;
+    }
+    .word-cloud-container {
+      background: white;
+      padding: 40px;
+      border-radius: 12px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+    }
+    .word-cloud {
+      position: relative;
+      width: 800px;
+      height: 500px;
+      overflow: hidden;
+      border: 1px solid #e5e7eb;
+      border-radius: 8px;
+    }
+    .word {
+      position: absolute;
+      font-weight: 600;
+      cursor: default;
+      user-select: none;
+      transform-origin: center center;
+      /* Remove transition - we'll use spring animation via JavaScript */
+    }
+    .word:hover {
+      z-index: 100;
+    }
+    .word.growing {
+      animation: pulse 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
+    }
+    @keyframes pulse {
+      0% { transform: translate(-50%, -50%) scale(1); }
+      50% { transform: translate(-50%, -50%) scale(1.2); }
+      100% { transform: translate(-50%, -50%) scale(1); }
+    }
+    .word-cloud-stats {
+      margin-top: 20px;
+      padding-top: 20px;
+      border-top: 1px solid #e5e7eb;
+      width: 100%;
+      text-align: center;
+      font-size: 14px;
+      color: #6b7280;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="controls">
+      <h2>Word Cloud Test Harness</h2>
+
+      <div class="button-group">
+        <button onclick="startSimulation()">Start Simulation</button>
+        <button onclick="stopSimulation()">Stop</button>
+        <button onclick="resetCloud()">Reset</button>
+        <button onclick="addRandomWord()">Add Random Word</button>
+        <button onclick="settleWords()">Settle Words</button>
+      </div>
+
+      <div class="slider-group">
+        <label>Animation Speed: <span id="speedValue">500</span>ms</label>
+        <input type="range" id="speed" min="100" max="2000" value="500"
+               oninput="document.getElementById('speedValue').textContent = this.value">
+      </div>
+
+      <div class="slider-group">
+        <label>Min Font Size: <span id="minSizeValue">30</span>px</label>
+        <input type="range" id="minSize" min="10" max="50" value="30"
+               oninput="document.getElementById('minSizeValue').textContent = this.value; updateCloud()">
+      </div>
+
+      <div class="slider-group">
+        <label>Max Font Size: <span id="maxSizeValue">100</span>px</label>
+        <input type="range" id="maxSize" min="40" max="120" value="100"
+               oninput="document.getElementById('maxSizeValue').textContent = this.value; updateCloud()">
+      </div>
+
+      <div class="slider-group">
+        <label>Size Compression Factor: <span id="compressionValue">2</span></label>
+        <input type="range" id="compression" min="1" max="10" value="2" step="0.5"
+               oninput="document.getElementById('compressionValue').textContent = this.value; updateCloud()">
+      </div>
+
+      <div class="stats">
+        <span>Responses: <strong id="responseCount">0</strong></span>
+        <span>Unique Words: <strong id="uniqueWords">0</strong></span>
+        <span>Status: <strong id="status">Ready</strong></span>
+      </div>
+    </div>
+
+    <div class="word-cloud-container">
+      <div class="word-cloud" id="wordCloud"></div>
+      <div class="word-cloud-stats" id="cloudStats">No words yet</div>
+    </div>
+  </div>
+
+  <script>
+    // Sample words for simulation - weighted towards more repetition
+    const SAMPLE_RESPONSES = [
+      // Very popular words (5+ times)
+      "awesome", "awesome", "awesome", "awesome", "awesome", "awesome",
+      "great", "great", "great", "great", "great",
+      "amazing", "amazing", "amazing", "amazing",
+      "fantastic", "fantastic", "fantastic",
+
+      // Moderately popular words (3-4 times)
+      "wonderful", "wonderful", "wonderful",
+      "excellent", "excellent", "excellent",
+      "brilliant", "brilliant", "brilliant",
+      "incredible", "incredible", "incredible",
+      "cool", "cool", "cool",
+
+      // Less popular words (2 times each)
+      "outstanding", "outstanding",
+      "terrific", "terrific",
+      "superb", "superb",
+      "phenomenal", "phenomenal",
+      "fabulous", "fabulous",
+      "impressive", "impressive",
+      "remarkable", "remarkable",
+      "beautiful", "beautiful",
+      "lovely", "lovely",
+
+      // Rare words (1 time each)
+      "spectacular", "magnificent", "exceptional", "extraordinary",
+      "stunning", "splendid", "divine", "glorious", "perfect",
+      "charming", "delightful", "pleasant", "marvelous"
+    ];
+
+    const WORD_COLORS = [
+      '#0077c8', '#f7941d', '#10b981', '#8b5cf6', '#ef4444',
+      '#06b6d4', '#f59e0b', '#ec4899', '#6366f1', '#14b8a6'
+    ];
+
+    let responses = [];
+    let wordCounts = new Map();
+    let simulationInterval = null;
+    let currentIndex = 0;
+    let wordElements = new Map(); // Track DOM elements
+    let wordTargets = new Map(); // Target positions for spring animation
+    let wordVelocities = new Map(); // Velocities for spring physics
+
+    function addWord(word) {
+      word = word.toLowerCase().trim();
+      if (!word) return;
+
+      const prevCount = wordCounts.get(word) || 0;
+      responses.push(word);
+      wordCounts.set(word, prevCount + 1);
+
+      // Trigger pulse animation if word already exists
+      if (prevCount > 0) {
+        const el = wordElements.get(word);
+        if (el) {
+          el.classList.remove('growing');
+          void el.offsetWidth; // Force reflow
+          el.classList.add('growing');
+        }
+      }
+
+      updateStats();
+      updateCloud();
+    }
+
+    function addRandomWord() {
+      const word = SAMPLE_RESPONSES[Math.floor(Math.random() * SAMPLE_RESPONSES.length)];
+      addWord(word);
+    }
+
+    function startSimulation() {
+      if (simulationInterval) return;
+
+      document.getElementById('status').textContent = 'Running';
+
+      // Shuffle the responses so words arrive in random order
+      const shuffledResponses = shuffleArray(SAMPLE_RESPONSES);
+
+      const scheduleNextWord = () => {
+        if (currentIndex >= shuffledResponses.length) {
+          stopSimulation();
+          document.getElementById('status').textContent = 'Completed';
+          return;
+        }
+
+        addWord(shuffledResponses[currentIndex]);
+        currentIndex++;
+
+        // Random timing between 50% and 150% of base speed
+        const baseSpeed = parseInt(document.getElementById('speed').value);
+        const randomDelay = baseSpeed * (0.5 + Math.random());
+
+        simulationInterval = setTimeout(scheduleNextWord, randomDelay);
+      };
+
+      scheduleNextWord();
+    }
+
+    function stopSimulation() {
+      if (simulationInterval) {
+        clearTimeout(simulationInterval);
+        simulationInterval = null;
+        document.getElementById('status').textContent = 'Stopped';
+      }
+    }
+
+    // Shuffle array helper
+    function shuffleArray(array) {
+      const shuffled = [...array];
+      for (let i = shuffled.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+      }
+      return shuffled;
+    }
+
+    function resetCloud() {
+      stopSimulation();
+      responses = [];
+      wordCounts.clear();
+      wordElements.clear();
+      wordTargets.clear();
+      wordVelocities.clear();
+      currentIndex = 0;
+      updateStats();
+      updateCloud();
+      document.getElementById('status').textContent = 'Ready';
+    }
+
+    function updateStats() {
+      document.getElementById('responseCount').textContent = responses.length;
+      document.getElementById('uniqueWords').textContent = wordCounts.size;
+    }
+
+    function updateCloud() {
+      const container = document.getElementById('wordCloud');
+      const width = container.clientWidth;
+      const height = container.clientHeight;
+
+      if (wordCounts.size === 0) {
+        container.innerHTML = '';
+        document.getElementById('cloudStats').textContent = 'No words yet';
+        return;
+      }
+
+      // Get sorted words by count
+      const sortedWords = Array.from(wordCounts.entries())
+        .map(([word, count]) => ({ word, count }))
+        .sort((a, b) => b.count - a.count);
+
+      // Calculate sizes with logarithmic scaling for more balanced appearance
+      const maxCount = sortedWords[0].count;
+      const minCount = Math.min(...sortedWords.map(w => w.count));
+      const minSize = parseInt(document.getElementById('minSize').value);
+      const maxSize = parseInt(document.getElementById('maxSize').value);
+      const compression = parseFloat(document.getElementById('compression').value);
+
+      const wordsWithSize = sortedWords.map((item, index) => {
+        // Logarithmic scaling - compresses size differences
+        // Higher compression = more equal sizes
+        const logCount = Math.log(item.count + 1);
+        const logMax = Math.log(maxCount + 1);
+        const logMin = Math.log(minCount + 1);
+        const logRange = logMax - logMin || 1;
+
+        // Apply compression factor
+        const ratio = Math.pow((logCount - logMin) / logRange, 1 / compression);
+        const size = minSize + (ratio * (maxSize - minSize));
+
+        return {
+          ...item,
+          size: Math.round(size),
+          color: WORD_COLORS[index % WORD_COLORS.length]
+        };
+      });
+
+      // Track existing elements
+      const existingWords = new Map();
+      container.querySelectorAll('.word').forEach(el => {
+        existingWords.set(el.dataset.word, el);
+      });
+
+      // Simple spiral placement with collision detection
+      const centerX = width / 2;
+      const centerY = height / 2;
+      const placedBounds = [];
+
+      wordsWithSize.forEach((item, index) => {
+        let placed = false;
+        let angle = index * 0.8;
+        let radius = 0;
+        const maxAttempts = 200;
+        let attempts = 0;
+
+        // Estimate text bounds with some padding
+        const estimatedWidth = item.word.length * item.size * 0.6;
+        const estimatedHeight = item.size * 1.2;
+        const padding = 8; // Increased padding for cleaner separation after settlement
+
+        while (!placed && attempts < maxAttempts) {
+          const x = centerX + Math.cos(angle) * radius;
+          const y = centerY + Math.sin(angle) * radius;
+
+          // Check if in bounds
+          if (x - estimatedWidth/2 >= padding && x + estimatedWidth/2 <= width - padding &&
+              y - estimatedHeight/2 >= padding && y + estimatedHeight/2 <= height - padding) {
+
+            // Check collision with existing words
+            const collides = placedBounds.some(bounds => {
+              return !(x + estimatedWidth/2 + padding < bounds.left ||
+                       x - estimatedWidth/2 - padding > bounds.right ||
+                       y + estimatedHeight/2 + padding < bounds.top ||
+                       y - estimatedHeight/2 - padding > bounds.bottom);
+            });
+
+            if (!collides) {
+              placedBounds.push({
+                left: x - estimatedWidth/2,
+                right: x + estimatedWidth/2,
+                top: y - estimatedHeight/2,
+                bottom: y + estimatedHeight/2
+              });
+
+              let wordEl = existingWords.get(item.word);
+
+              if (wordEl) {
+                // Update existing word with spring animation
+                animateWordToTarget(wordEl, item.word, x, y, item.size);
+                wordEl.style.zIndex = item.count.toString(); // Update z-index as count changes
+                wordEl.title = `"${item.word}" appears ${item.count} time${item.count !== 1 ? 's' : ''}`;
+                existingWords.delete(item.word);
+              } else {
+                // Create new word
+                wordEl = document.createElement('span');
+                wordEl.className = 'word';
+                wordEl.dataset.word = item.word;
+                wordEl.textContent = item.word;
+                wordEl.style.fontSize = `${item.size}px`;
+                wordEl.style.color = item.color;
+                wordEl.style.left = `${x}px`;
+                wordEl.style.top = `${y}px`;
+                wordEl.style.transform = 'translate(-50%, -50%) scale(0)';
+                wordEl.style.opacity = '0';
+                wordEl.style.zIndex = item.count.toString(); // Higher count = on top
+                wordEl.title = `"${item.word}" appears ${item.count} time${item.count !== 1 ? 's' : ''}`;
+                container.appendChild(wordEl);
+                wordElements.set(item.word, wordEl);
+
+                // Animate in
+                requestAnimationFrame(() => {
+                  wordEl.style.transition = 'transform 0.5s cubic-bezier(0.34, 1.56, 0.64, 1), opacity 0.3s';
+                  wordEl.style.transform = 'translate(-50%, -50%) scale(1)';
+                  wordEl.style.opacity = '1';
+                });
+              }
+
+              placed = true;
+            }
+          }
+
+          angle += 0.3;
+          radius += 2;
+          attempts++;
+        }
+
+        // If we couldn't place the word after max attempts, find any available spot
+        if (!placed && attempts >= maxAttempts) {
+          // Try a final random placement within bounds
+          let fallbackPlaced = false;
+          for (let i = 0; i < 50; i++) {
+            const randomAngle = Math.random() * Math.PI * 2;
+            const randomRadius = Math.random() * Math.min(width, height) * 0.4;
+            const x = centerX + Math.cos(randomAngle) * randomRadius;
+            const y = centerY + Math.sin(randomAngle) * randomRadius;
+
+            // Make sure it's in bounds
+            if (x - estimatedWidth/2 >= padding && x + estimatedWidth/2 <= width - padding &&
+                y - estimatedHeight/2 >= padding && y + estimatedHeight/2 <= height - padding) {
+
+              let wordEl = existingWords.get(item.word);
+
+              if (wordEl) {
+                animateWordToTarget(wordEl, item.word, x, y, item.size);
+                wordEl.title = `"${item.word}" appears ${item.count} time${item.count !== 1 ? 's' : ''}`;
+                existingWords.delete(item.word);
+              } else {
+                wordEl = document.createElement('span');
+                wordEl.className = 'word';
+                wordEl.dataset.word = item.word;
+                wordEl.textContent = item.word;
+                wordEl.style.fontSize = `${item.size}px`;
+                wordEl.style.color = item.color;
+                wordEl.style.left = `${x}px`;
+                wordEl.style.top = `${y}px`;
+                wordEl.style.transform = 'translate(-50%, -50%) scale(0)';
+                wordEl.style.opacity = '0';
+                wordEl.style.zIndex = item.count.toString(); // Higher count = on top
+                wordEl.title = `"${item.word}" appears ${item.count} time${item.count !== 1 ? 's' : ''}`;
+                container.appendChild(wordEl);
+                wordElements.set(item.word, wordEl);
+
+                requestAnimationFrame(() => {
+                  wordEl.style.transition = 'transform 0.5s cubic-bezier(0.34, 1.56, 0.64, 1), opacity 0.3s';
+                  wordEl.style.transform = 'translate(-50%, -50%) scale(1)';
+                  wordEl.style.opacity = '1';
+                });
+              }
+              fallbackPlaced = true;
+              break;
+            }
+          }
+        }
+      });
+
+      // Remove words that no longer exist
+      existingWords.forEach(el => {
+        el.style.transition = 'transform 0.3s, opacity 0.3s';
+        el.style.transform = 'translate(-50%, -50%) scale(0)';
+        el.style.opacity = '0';
+        setTimeout(() => el.remove(), 300);
+      });
+
+      // Update stats
+      const topWord = wordsWithSize[0];
+      document.getElementById('cloudStats').textContent =
+        `${wordCounts.size} unique words • Top word: "${topWord.word}" (${topWord.count}×)`;
+    }
+
+    // Spring animation for smooth repositioning
+    function animateWordToTarget(element, word, targetX, targetY, targetSize) {
+      const currentX = parseFloat(element.style.left) || targetX;
+      const currentY = parseFloat(element.style.top) || targetY;
+      const currentSize = parseFloat(element.style.fontSize) || targetSize;
+
+      // Simple spring interpolation
+      const spring = 0.15; // Stiffness
+      const damping = 0.7; // Friction
+
+      let vx = wordVelocities.get(word)?.x || 0;
+      let vy = wordVelocities.get(word)?.y || 0;
+
+      const animate = () => {
+        const x = parseFloat(element.style.left);
+        const y = parseFloat(element.style.top);
+        const size = parseFloat(element.style.fontSize);
+
+        // Calculate spring force
+        const dx = targetX - x;
+        const dy = targetY - y;
+        const ds = targetSize - size;
+
+        // Update velocity
+        vx = (vx + dx * spring) * damping;
+        vy = (vy + dy * spring) * damping;
+
+        // Update position
+        const newX = x + vx;
+        const newY = y + vy;
+        const newSize = size + ds * spring;
+
+        element.style.left = `${newX}px`;
+        element.style.top = `${newY}px`;
+        element.style.fontSize = `${newSize}px`;
+
+        wordVelocities.set(word, { x: vx, y: vy });
+
+        // Continue if not settled
+        if (Math.abs(dx) > 0.5 || Math.abs(dy) > 0.5 || Math.abs(ds) > 0.5) {
+          requestAnimationFrame(animate);
+        }
+      };
+
+      animate();
+    }
+
+    // Helper function to check if two rectangles overlap
+    function rectanglesOverlap(rectA, rectB, padding = 0) {
+      // Two rectangles DON'T overlap if one is completely separated from the other
+      // Check if A is completely to the left, right, above, or below B
+
+      const separatedHorizontally = (rectA.right + padding <= rectB.left) || (rectA.left - padding >= rectB.right);
+      const separatedVertically = (rectA.bottom + padding <= rectB.top) || (rectA.top - padding >= rectB.bottom);
+
+      // If they're separated on either axis, they don't overlap
+      // If they're NOT separated on both axes, they DO overlap
+      return !separatedHorizontally && !separatedVertically;
+    }
+
+    // SUPER SIMPLE TEST: Hard-code 4 words at specific positions (disabled)
+    function settleWords_SIMPLE() {
+      const container = document.getElementById('wordCloud');
+      const padding = 10;
+
+      // Clear everything
+      container.innerHTML = '';
+
+      // Create 4 test words with hard-coded positions
+      const testWords = [
+        { text: 'awesome', left: 100, top: 100, fontSize: 80 },
+        { text: 'great', left: 100, top: 300, fontSize: 60 },
+        { text: 'cool', left: 500, top: 100, fontSize: 50 },  // Moved right to avoid overlap
+        { text: 'nice', left: 500, top: 300, fontSize: 40 }
+      ];
+
+      console.log('=== SIMPLE TEST: Placing 4 words with collision detection ===');
+
+      const placed = [];
+
+      testWords.forEach(word => {
+        const el = document.createElement('span');
+        el.className = 'word';
+        el.textContent = word.text;
+        el.style.position = 'absolute';
+        el.style.left = `${word.left}px`;
+        el.style.top = `${word.top}px`;
+        el.style.fontSize = `${word.fontSize}px`;
+        el.style.fontWeight = '600';
+        el.style.display = 'inline-block';
+        el.style.whiteSpace = 'nowrap';
+        el.style.border = '2px solid red';
+        el.style.margin = '0';
+        el.style.padding = '0';
+        el.style.opacity = '1';
+
+        container.appendChild(el);
+
+        // Wait for render then check actual position
+        requestAnimationFrame(() => {
+          const rect = el.getBoundingClientRect();
+          const containerRect = container.getBoundingClientRect();
+
+          const bounds = {
+            left: el.offsetLeft,
+            top: el.offsetTop,
+            right: el.offsetLeft + rect.width,
+            bottom: el.offsetTop + rect.height
+          };
+
+          console.log(`\n"${word.text}":`);
+          console.log(`  Bounds: (${bounds.left}, ${bounds.top}) to (${bounds.right}, ${bounds.bottom})`);
+          console.log(`  Size: ${rect.width.toFixed(0)}×${rect.height.toFixed(0)}`);
+
+          // Check for overlaps with previously placed words
+          let hasOverlap = false;
+          placed.forEach(p => {
+            if (rectanglesOverlap(bounds, p.bounds, padding)) {
+              console.log(`  ⚠️ OVERLAPS with "${p.word}"!`);
+              hasOverlap = true;
+            }
+          });
+
+          if (!hasOverlap) {
+            console.log(`  ✓ No overlaps`);
+          }
+
+          placed.push({ word: word.text, bounds });
+        });
+      });
+
+      return;
+    }
+
+    // FULL VERSION with fixed collision detection
+    function settleWords() {
+      const container = document.getElementById('wordCloud');
+      const words = Array.from(container.querySelectorAll('.word'));
+
+      if (words.length === 0) return;
+
+      const width = container.clientWidth;
+      const height = container.clientHeight;
+
+      // Add visual grid overlay for debugging
+      // Remove any existing grid first
+      const existingGrid = container.querySelector('.debug-grid');
+      if (existingGrid) existingGrid.remove();
+
+      const gridOverlay = document.createElement('div');
+      gridOverlay.className = 'debug-grid';
+      gridOverlay.style.position = 'absolute';
+      gridOverlay.style.top = '0';
+      gridOverlay.style.left = '0';
+      gridOverlay.style.width = '100%';
+      gridOverlay.style.height = '100%';
+      gridOverlay.style.pointerEvents = 'none';
+      gridOverlay.style.zIndex = '1000';
+
+      // Draw vertical lines every 100px
+      for (let x = 0; x <= width; x += 100) {
+        const line = document.createElement('div');
+        line.style.position = 'absolute';
+        line.style.left = `${x}px`;
+        line.style.top = '0';
+        line.style.width = '1px';
+        line.style.height = '100%';
+        line.style.backgroundColor = 'rgba(0, 0, 0, 0.1)';
+        gridOverlay.appendChild(line);
+
+        // Add label
+        const label = document.createElement('div');
+        label.textContent = x;
+        label.style.position = 'absolute';
+        label.style.left = `${x + 2}px`;
+        label.style.top = '2px';
+        label.style.fontSize = '10px';
+        label.style.color = 'rgba(0, 0, 0, 0.5)';
+        gridOverlay.appendChild(label);
+      }
+
+      // Draw horizontal lines every 100px
+      for (let y = 0; y <= height; y += 100) {
+        const line = document.createElement('div');
+        line.style.position = 'absolute';
+        line.style.left = '0';
+        line.style.top = `${y}px`;
+        line.style.width = '100%';
+        line.style.height = '1px';
+        line.style.backgroundColor = 'rgba(0, 0, 0, 0.1)';
+        gridOverlay.appendChild(line);
+
+        // Add label
+        const label = document.createElement('div');
+        label.textContent = y;
+        label.style.position = 'absolute';
+        label.style.left = '2px';
+        label.style.top = `${y + 2}px`;
+        label.style.fontSize = '10px';
+        label.style.color = 'rgba(0, 0, 0, 0.5)';
+        gridOverlay.appendChild(label);
+      }
+
+      container.appendChild(gridOverlay);
+
+      // Measure words
+      const canvas = document.createElement('canvas');
+      const ctx = canvas.getContext('2d');
+
+      const wordData = words.map(el => {
+        const text = el.textContent;
+        const count = wordCounts.get(el.dataset.word) || 1;
+
+        // Calculate what the fontSize SHOULD be based on count (matching the original updateCloud logic)
+        const sortedCounts = Array.from(wordCounts.values()).sort((a, b) => b - a);
+        const maxCount = sortedCounts[0];
+        const minCount = sortedCounts[sortedCounts.length - 1];
+        const minSize = parseInt(document.getElementById('minSize').value);
+        const maxSize = parseInt(document.getElementById('maxSize').value);
+        const compression = parseFloat(document.getElementById('compression').value);
+
+        const logCount = Math.log(count + 1);
+        const logMax = Math.log(maxCount + 1);
+        const logMin = Math.log(minCount + 1);
+        const logRange = logMax - logMin || 1;
+        const ratio = Math.pow((logCount - logMin) / logRange, 1 / compression);
+        const fontSize = Math.round(minSize + (ratio * (maxSize - minSize)));
+
+        // Temporarily render the word to measure its ACTUAL size
+        // Apply ALL the styles that will be used in final rendering
+        el.style.position = 'absolute';
+        el.style.left = '-9999px';
+        el.style.top = '-9999px';
+        el.style.fontSize = `${fontSize}px`;
+        el.style.fontWeight = '600';
+        el.style.visibility = 'hidden';
+        el.style.display = 'inline-block';
+        el.style.whiteSpace = 'nowrap';
+        el.style.transform = 'none';
+        el.style.border = '2px solid red'; // Include the debug border in measurement!
+        el.style.margin = '0';
+        el.style.padding = '0';
+
+        const rect = el.getBoundingClientRect();
+        const textWidth = rect.width;
+        const textHeight = rect.height;
+
+        return {
+          element: el,
+          word: el.dataset.word,
+          width: textWidth,
+          height: textHeight,
+          fontSize: fontSize,
+          count: count
+        };
+      }).sort((a, b) => b.count - a.count);
+
+      // Work with top 10 words for simpler debugging
+      const top10 = wordData.slice(0, 10);
+
+      console.log('Settling top 10 words:', top10.map(w => w.word).join(', '));
+      console.log('Container dimensions:', width, 'x', height);
+      const containerRect = container.getBoundingClientRect();
+      console.log('Container rect:', containerRect);
+      console.log('Page scroll:', window.scrollX, window.scrollY);
+      console.log('Container scroll:', container.scrollLeft, container.scrollTop);
+
+      // CRITICAL: Stop all ongoing spring animations by clearing velocities
+      // This prevents animations from continuing to update transforms while we're settling
+      wordVelocities.clear();
+      console.log('Cleared all word velocities to stop animations');
+
+      // BEFORE we do anything, log where all words currently are
+      console.log('\n=== INITIAL POSITIONS (before settling) ===');
+      wordData.forEach(item => {
+        const rect = item.element.getBoundingClientRect();
+        const left = rect.left - containerRect.left;
+        const top = rect.top - containerRect.top;
+        const right = left + rect.width;
+        const bottom = top + rect.height;
+        console.log(`"${item.word}": (${left.toFixed(0)}, ${top.toFixed(0)}) to (${right.toFixed(0)}, ${bottom.toFixed(0)}) size: ${rect.width.toFixed(0)}×${rect.height.toFixed(0)}`);
+      });
+      console.log('=== END INITIAL POSITIONS ===\n');
+
+      // SIMPLE APPROACH: Don't try to preserve animated positions.
+      // Just hide all words and we'll place them fresh in non-overlapping positions.
+      console.log('\n=== HIDING ALL WORDS FOR SETTLEMENT ===');
+      wordData.forEach(item => {
+        item.element.style.opacity = '0';
+      });
+      console.log('=== READY TO PLACE WORDS ===\n');
+
+      const placed = [];
+      const padding = 20; // Increase padding to account for text rendering quirks
+
+      // Build list of all possible positions, sorted by distance from center
+      const centerX = width / 2;
+      const centerY = height / 2;
+
+      // Simple grid search - try positions from center outward
+      top10.forEach((item, index) => {
+        let found = false;
+
+        // Build list of candidate positions with finer grid
+        const positions = [];
+        for (let y = padding + item.height/2; y < height - padding - item.height/2; y += 5) {
+          for (let x = padding + item.width/2; x < width - padding - item.width/2; x += 5) {
+            const dist = Math.sqrt((x - centerX) ** 2 + (y - centerY) ** 2);
+            positions.push({ x, y, dist });
+          }
+        }
+
+        // Sort by distance from center (closest first)
+        positions.sort((a, b) => a.dist - b.dist);
+
+        // Try each position
+        for (const pos of positions) {
+          if (found) break;
+
+          // Calculate where this word WOULD be positioned (top-left corner)
+          const leftPos = pos.x - item.width/2;
+          const topPos = pos.y - item.height/2;
+          const rightPos = leftPos + item.width;
+          const bottomPos = topPos + item.height;
+
+          // Check collision - but we need to account for the fact that actual rendering
+          // will be slightly different due to translate(-50%, -50%) transform.
+          // The actual bounds will be what we get from getBoundingClientRect() AFTER positioning.
+          // For now, check using expected bounds with padding to give extra space.
+          let overlaps = false;
+          const candidate = { left: leftPos, right: rightPos, top: topPos, bottom: bottomPos };
+
+          for (const p of placed) {
+            if (rectanglesOverlap(candidate, p, padding)) {
+              overlaps = true;
+              break;
+            }
+          }
+
+          if (!overlaps) {
+            // DEBUG: Check what styles are on the element BEFORE we reposition
+            const beforeStyles = window.getComputedStyle(item.element);
+            console.log(`\nBEFORE repositioning "${item.word}":`);
+            console.log(`  transform: ${beforeStyles.transform}`);
+            console.log(`  left: ${beforeStyles.left}, top: ${beforeStyles.top}`);
+
+            // CRITICAL FIX: The words have inline transforms from animation that we can't easily clear
+            // The ONLY reliable way is to use !important or recreate the element entirely
+            const parent = item.element.parentNode;
+            const centerX = leftPos + item.width/2;
+            const centerY = topPos + item.height/2;
+
+            // Force clear the transform using cssText to override everything
+            item.element.style.cssText = `
+              position: absolute !important;
+              left: ${centerX}px !important;
+              top: ${centerY}px !important;
+              font-size: ${item.fontSize}px !important;
+              font-weight: 600 !important;
+              transform: translate(-50%, -50%) !important;
+              opacity: 1 !important;
+              visibility: visible !important;
+              display: inline-block !important;
+              white-space: nowrap !important;
+              border: 2px solid red !important;
+              margin: 0 !important;
+              padding: 0 !important;
+              color: ${item.element.dataset.color || item.element.style.color} !important;
+            `;
+
+            // Force a reflow to get accurate bounds AFTER the transform is applied
+            void item.element.offsetWidth;
+
+            // DEBUG: Check transform AFTER reappending
+            const afterStyles = window.getComputedStyle(item.element);
+            console.log(`AFTER repositioning "${item.word}":`);
+            console.log(`  transform: ${afterStyles.transform}`);
+            console.log(`  left: ${afterStyles.left}, top: ${afterStyles.top}`);
+
+            // NOW read the ACTUAL rendered bounds and store those for collision detection
+            const actualRect = item.element.getBoundingClientRect();
+            const containerRect = container.getBoundingClientRect();
+
+            // Calculate bounds relative to container
+            const actualLeft = actualRect.left - containerRect.left;
+            const actualTop = actualRect.top - containerRect.top;
+            const actualRight = actualLeft + actualRect.width;
+            const actualBottom = actualTop + actualRect.height;
+
+            // Store ACTUAL bounds for collision detection with next words
+            const actualBounds = {
+              left: actualLeft,
+              right: actualRight,
+              top: actualTop,
+              bottom: actualBottom
+            };
+            placed.push(actualBounds);
+
+            console.log(`✓ "${item.word}"`);
+            console.log(`  Measured size: ${item.width.toFixed(0)}×${item.height.toFixed(0)}`);
+            console.log(`  Actual rendered size: ${actualRect.width.toFixed(0)}×${actualRect.height.toFixed(0)}`);
+            console.log(`  Expected bounds: (${leftPos.toFixed(0)}, ${topPos.toFixed(0)}) to (${rightPos.toFixed(0)}, ${bottomPos.toFixed(0)})`);
+            console.log(`  Actual bounds: (${actualLeft.toFixed(0)}, ${actualTop.toFixed(0)}) to (${actualRight.toFixed(0)}, ${actualBottom.toFixed(0)})`);
+            console.log(`  RED BOX CORNERS (as rendered on screen):`);
+            console.log(`    Top-Left: (${actualLeft.toFixed(1)}, ${actualTop.toFixed(1)})`);
+            console.log(`    Top-Right: (${actualRight.toFixed(1)}, ${actualTop.toFixed(1)})`);
+            console.log(`    Bottom-Left: (${actualLeft.toFixed(1)}, ${actualBottom.toFixed(1)})`);
+            console.log(`    Bottom-Right: (${actualRight.toFixed(1)}, ${actualBottom.toFixed(1)})`);
+
+            // Check if they match
+            if (Math.abs(actualLeft - leftPos) > 1 || Math.abs(actualTop - topPos) > 1) {
+              console.log(`  ⚠️ POSITION MISMATCH!`);
+            }
+            if (Math.abs(actualRect.width - item.width) > 1 || Math.abs(actualRect.height - item.height) > 1) {
+              console.log(`  ⚠️ SIZE MISMATCH!`);
+            }
+            found = true;
+          }
+        }
+
+        if (!found) {
+          console.log(`✗ "${item.word}" - no space found after checking ${positions.length} positions`);
+        }
+      });
+
+      console.log(`Placed ${placed.length} out of ${top10.length} words`);
+      console.log('\nFinal placed bounds:');
+      placed.forEach((p, i) => {
+        console.log(`  ${i}: [${p.left.toFixed(0)}, ${p.right.toFixed(0)}, ${p.top.toFixed(0)}, ${p.bottom.toFixed(0)}]`);
+      });
+    }
+
+    // Auto-settle when simulation completes
+    const originalStopSimulation = stopSimulation;
+    stopSimulation = function() {
+      originalStopSimulation();
+      if (document.getElementById('status').textContent === 'Completed') {
+        setTimeout(() => settleWords(), 500); // Settle after a brief pause
+      }
+    };
+
+    // Initialize
+    updateStats();
+    updateCloud();
+  </script>
+</body>
+</html>

@@ -10,6 +10,7 @@ import {
   set,
   get,
   update,
+  remove,
   onValue,
   off,
   Unsubscribe,
@@ -448,12 +449,13 @@ async function endSession() {
 
   if (currentSessionCode) {
     try {
-      // Update session status in Firebase
-      await update(ref(database, `sessions/${currentSessionCode}`), {
-        status: 'ended'
-      });
+      // Delete the entire session from Firebase to clean up all data
+      // This removes participants, responses, review game data, everything
+      console.log('[Interactive Presentations] Deleting session data from Firebase:', currentSessionCode);
+      await remove(ref(database, `sessions/${currentSessionCode}`));
+      console.log('[Interactive Presentations] Session data deleted successfully');
     } catch (error) {
-      console.error('[Interactive Presentations] Error ending session:', error);
+      console.error('[Interactive Presentations] Error deleting session:', error);
     }
   }
 

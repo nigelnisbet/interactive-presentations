@@ -1,0 +1,16 @@
+{
+  "id": "trillionaire-default",
+  "type": "collaborative-tap-game",
+  "name": "Who Wants to be a Trillionaire?",
+  "config": {
+    "title": "Who Wants to be a Trillionaire?",
+    "question": "Would you prefer $1,000,000 a day, or $1 on day one that grows to $2 on day two, and $4 on day three etc?",
+    "linearIncrement": 1000000,
+    "cooldownSeconds": 3,
+    "winCondition": 1000000000000
+  },
+  "createdBy": "system",
+  "createdAt": 1710172800000,
+  "updatedAt": 1710172800000,
+  "isShared": true
+}

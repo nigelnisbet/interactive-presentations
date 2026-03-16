@@ -38,18 +38,26 @@ const ReviewGameIcon = () => (
   </svg>
 );
 
+const CollaborativeTapGameIcon = () => (
+  <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
+    <circle cx="12" cy="12" r="10" fill="none" stroke="currentColor" strokeWidth="2" />
+    <path d="M8 12h8M12 8v8" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+  </svg>
+);
+
 const activityColors: Record<string, { bg: string; border: string; text: string }> = {
   poll: { bg: '#dbeafe', border: '#3b82f6', text: '#1e40af' },
   quiz: { bg: '#fef3c7', border: '#f59e0b', text: '#92400e' },
   'web-link': { bg: '#d1fae5', border: '#10b981', text: '#065f46' },
   'text-response': { bg: '#fae8ff', border: '#c026d3', text: '#86198f' },
   'review-game': { bg: '#fef9c3', border: '#eab308', text: '#854d0e' },
+  'collaborative-tap-game': { bg: '#fef3c7', border: '#fbbf24', text: '#92400e' },
 };
 
 interface SlideThumbnailProps {
   indexh: number;
   indexv: number;
-  activity?: ActivityFormData;
+  activity?: ActivityFormData | { type: 'collaborative-tap-game'; title: string; [key: string]: any };
   onClick: (shiftKey: boolean) => void;
   onDoubleClick?: () => void;
   onDelete?: () => void;
@@ -112,6 +120,7 @@ export const SlideThumbnail: React.FC<SlideThumbnailProps> = ({
       case 'web-link': return <WebLinkIcon />;
       case 'text-response': return <TextResponseIcon />;
       case 'review-game': return <ReviewGameIcon />;
+      case 'collaborative-tap-game': return <CollaborativeTapGameIcon />;
       default: return null;
     }
   };
@@ -126,6 +135,9 @@ export const SlideThumbnail: React.FC<SlideThumbnailProps> = ({
     }
     if (activity.type === 'review-game') {
       return (activity as any).gameTitle || `${(activity as any).gameQuestions?.length || 0} Questions`;
+    }
+    if (activity.type === 'collaborative-tap-game') {
+      return (activity as any).title || 'Collaborative Game';
     }
     return activity.question;
   };

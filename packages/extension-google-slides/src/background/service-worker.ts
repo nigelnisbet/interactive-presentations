@@ -6,7 +6,7 @@
  */
 
 import { initializeApp } from 'firebase/app';
-import { getDatabase, ref, set, get, update, onValue, Unsubscribe } from 'firebase/database';
+import { getDatabase, ref, set, get, update, remove, onValue, Unsubscribe } from 'firebase/database';
 
 console.log('[Google Slides Extension] Background service worker started');
 
@@ -292,11 +292,13 @@ async function endSession() {
 
   if (currentSessionCode) {
     try {
-      await update(ref(database, `sessions/${currentSessionCode}`), {
-        status: 'ended'
-      });
+      // Delete the entire session from Firebase to clean up all data
+      // This removes participants, responses, review game data, everything
+      console.log('[Google Slides Extension] Deleting session data from Firebase:', currentSessionCode);
+      await remove(ref(database, `sessions/${currentSessionCode}`));
+      console.log('[Google Slides Extension] Session data deleted successfully');
     } catch (error) {
-      console.error('[Google Slides Extension] Error ending session:', error);
+      console.error('[Google Slides Extension] Error deleting session:', error);
     }
   }
 

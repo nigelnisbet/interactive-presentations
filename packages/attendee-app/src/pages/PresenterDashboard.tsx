@@ -6,6 +6,7 @@ import { QuizResults } from '../components/presenter/QuizResults';
 import { TextResponseResults } from '../components/presenter/TextResponseResults';
 import { ReviewGameResults } from '../components/presenter/ReviewGameResults';
 import { SubmitSampleResultsView } from '../components/presenter/SubmitSampleResults';
+import { CollaborativeTapGameResults } from '../components/presenter/CollaborativeTapGameResults';
 
 // ST Math brand colors
 const stMathBlue = '#0077c8';
@@ -134,6 +135,7 @@ export const PresenterDashboard: React.FC = () => {
                     {currentActivity.type === 'text-response' && (currentActivity as any).prompt}
                     {currentActivity.type === 'review-game' && (currentActivity as any).title}
                     {currentActivity.type === 'submit-sample' && (currentActivity as any).instructions}
+                    {currentActivity.type === 'collaborative-tap-game' && (currentActivity as any).title}
                   </h2>
                 </div>
                 <div className="text-right">
@@ -174,6 +176,9 @@ export const PresenterDashboard: React.FC = () => {
             )}
             {currentActivity.type === 'submit-sample' && (
               <SubmitSampleResultsView results={currentResults as any} />
+            )}
+            {currentActivity.type === 'collaborative-tap-game' && (
+              <CollaborativeTapGameResults activity={currentActivity as any} results={currentResults as any} />
             )}
           </div>
         )}

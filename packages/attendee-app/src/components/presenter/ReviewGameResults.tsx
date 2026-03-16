@@ -15,6 +15,11 @@ interface GameState {
   currentQuestionIndex: number;
   questionStartTime: number;
   responseCount?: number;
+  questionResults?: {
+    responses: number[];
+    totalResponses: number;
+    correctCount: number;
+  };
 }
 
 export const ReviewGameResults: React.FC<ReviewGameResultsProps> = ({ activity }) => {
@@ -194,6 +199,8 @@ export const ReviewGameResults: React.FC<ReviewGameResultsProps> = ({ activity }
   // Reveal phase
   if (gameState.gamePhase === 'reveal' && currentQuestion) {
     const isLastQuestion = gameState.currentQuestionIndex === activity.questions.length - 1;
+    const responses = gameState.questionResults?.responses || [];
+    const totalResponses = gameState.questionResults?.totalResponses || 0;
 
     return (
       <div style={styles.container}>
@@ -207,6 +214,11 @@ export const ReviewGameResults: React.FC<ReviewGameResultsProps> = ({ activity }
         <div style={styles.revealOptions}>
           {currentQuestion.options.map((option, index) => {
             const isCorrect = index === currentQuestion.correctAnswer;
+            const responseCount = responses[index] || 0;
+            const percentage = totalResponses > 0
+              ? Math.round((responseCount / totalResponses) * 100)
+              : 0;
+
             return (
               <div
                 key={index}
@@ -219,6 +231,7 @@ export const ReviewGameResults: React.FC<ReviewGameResultsProps> = ({ activity }
                   {String.fromCharCode(65 + index)}
                 </span>
                 <span style={styles.optionText}>{option}</span>
+                <span style={styles.percentageBadge}>{percentage}%</span>
                 {isCorrect && <span style={styles.correctBadge}>✓ Correct</span>}
               </div>
             );
@@ -542,8 +555,19 @@ const styles: Record<string, React.CSSProperties> = {
     backgroundColor: '#dcfce7',
     borderColor: '#10b981',
   },
-  correctBadge: {
+  percentageBadge: {
     marginLeft: 'auto',
+    fontSize: '16px',
+    fontWeight: '700',
+    color: '#1f2937',
+    backgroundColor: '#f3f4f6',
+    padding: '4px 12px',
+    borderRadius: '6px',
+    minWidth: '55px',
+    textAlign: 'center',
+  },
+  correctBadge: {
+    marginLeft: '8px',
     fontSize: '14px',
     fontWeight: '600',
     color: '#166534',

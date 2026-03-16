@@ -876,13 +876,14 @@ const ActivityBuilderInner: React.FC = () => {
       tags: presentationTags,
       ownerId: user?.id,
       activities: activities.map(activity => {
+        // Build base object with only core fields and library tracking
         const base: any = {
           activityId: activity.activityId,
           slidePosition: activity.slidePosition,
           activityType: activity.type,
         };
 
-        // Preserve library tracking fields
+        // Preserve library tracking fields if they exist
         if ((activity as any).sourceLibraryId) {
           base.sourceLibraryId = (activity as any).sourceLibraryId;
         }
@@ -890,76 +891,86 @@ const ActivityBuilderInner: React.FC = () => {
           base.copiedFromLibraryAt = (activity as any).copiedFromLibraryAt;
         }
 
+        // Build config object with ONLY the fields for this activity type
+        let config: any;
+
         if (activity.type === 'poll') {
-          return {
-            ...base,
-            config: {
-              type: 'poll',
-              question: activity.question,
-              options: activity.options,
-              showResults: activity.showResults,
-            },
+          config = {
+            type: 'poll',
+            question: activity.question,
+            options: activity.options,
+            showResults: activity.showResults,
           };
         } else if (activity.type === 'quiz') {
-          return {
-            ...base,
-            config: {
-              type: 'quiz',
-              question: activity.question,
-              options: activity.options,
-              correctAnswer: activity.correctAnswer,
-              timeLimit: activity.timeLimit,
-              showResults: activity.showResults,
-              points: 100,
-            },
+          config = {
+            type: 'quiz',
+            question: activity.question,
+            options: activity.options,
+            correctAnswer: activity.correctAnswer,
+            timeLimit: activity.timeLimit,
+            showResults: activity.showResults,
+            points: 100,
           };
         } else if (activity.type === 'text-response') {
-          return {
-            ...base,
-            config: {
-              type: 'text-response',
-              prompt: activity.prompt,
-              placeholder: activity.placeholder,
-              maxLength: activity.maxLength,
-            },
+          config = {
+            type: 'text-response',
+            prompt: activity.prompt,
+            placeholder: activity.placeholder,
+            maxLength: activity.maxLength,
           };
         } else if (activity.type === 'review-game') {
-          return {
-            ...base,
-            config: {
-              type: 'review-game',
-              title: (activity as any).gameTitle,
-              questions: (activity as any).gameQuestions,
-              defaultTimeLimit: (activity as any).defaultTimeLimit || 20,
-              maxPoints: (activity as any).maxPoints || 1000,
-              minPoints: (activity as any).minPoints || 100,
-            },
+          config = {
+            type: 'review-game',
+            title: (activity as any).gameTitle,
+            questions: (activity as any).gameQuestions,
+            defaultTimeLimit: (activity as any).defaultTimeLimit || 20,
+            maxPoints: (activity as any).maxPoints || 1000,
+            minPoints: (activity as any).minPoints || 100,
           };
         } else if (activity.type === 'submit-sample') {
-          return {
-            ...base,
-            config: {
-              type: 'submit-sample',
-              url: activity.url,
-              instructions: activity.instructions,
-              allowAnnotations: activity.allowAnnotations,
-              allowMultipleSubmissions: activity.allowMultipleSubmissions,
-              canvasSelector: activity.canvasSelector,
-            },
+          config = {
+            type: 'submit-sample',
+            url: activity.url,
+            instructions: activity.instructions,
+            allowAnnotations: activity.allowAnnotations,
+            allowMultipleSubmissions: activity.allowMultipleSubmissions,
+            canvasSelector: activity.canvasSelector,
+          };
+        } else if ((activity as any).type === 'collaborative-tap-game') {
+          config = {
+            type: 'collaborative-tap-game',
+            title: (activity as any).title,
+            question: (activity as any).question,
+            linearIncrement: (activity as any).linearIncrement,
+            cooldownSeconds: (activity as any).cooldownSeconds,
+            winCondition: (activity as any).winCondition,
           };
         } else {
-          return {
-            ...base,
-            config: {
-              type: 'web-link',
-              title: activity.title,
-              description: activity.description,
-              url: activity.url,
-              displayMode: activity.displayMode,
-              fullScreen: activity.fullScreen,
-            },
+          // web-link or unknown type
+          config = {
+            type: 'web-link',
+            title: activity.title,
+            description: activity.description,
+            url: activity.url,
+            displayMode: activity.displayMode,
+            fullScreen: activity.fullScreen,
           };
         }
+
+        // Filter out undefined values from config to prevent Firebase errors
+        const cleanConfig = Object.fromEntries(
+          Object.entries(config).filter(([_, value]) => value !== undefined)
+        );
+
+        // Return the complete activity object without spreading the activity
+        return {
+          activityId: base.activityId,
+          slidePosition: base.slidePosition,
+          activityType: base.activityType,
+          ...(base.sourceLibraryId && { sourceLibraryId: base.sourceLibraryId }),
+          ...(base.copiedFromLibraryAt && { copiedFromLibraryAt: base.copiedFromLibraryAt }),
+          config: cleanConfig,
+        };
       }),
     };
   }, [presentationId, presentationTitle, presentationTags, activities, user]);

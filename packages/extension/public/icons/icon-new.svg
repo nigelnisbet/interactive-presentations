@@ -1,0 +1,20 @@
+<svg width="128" height="128" viewBox="0 0 128 128" xmlns="http://www.w3.org/2000/svg">
+  <!-- Background -->
+  <rect width="128" height="128" rx="24" fill="#0077c8"/>
+
+  <!-- Presentation screen -->
+  <rect x="20" y="25" width="88" height="60" rx="4" fill="white" opacity="0.95"/>
+
+  <!-- Screen content lines (representing slides) -->
+  <rect x="30" y="35" width="30" height="4" rx="2" fill="#0077c8" opacity="0.6"/>
+  <rect x="30" y="45" width="40" height="4" rx="2" fill="#0077c8" opacity="0.4"/>
+  <rect x="30" y="55" width="25" height="4" rx="2" fill="#0077c8" opacity="0.4"/>
+
+  <!-- Interactive star/sparkle -->
+  <circle cx="85" cy="50" r="16" fill="#f7941d"/>
+  <path d="M 85 38 L 88 46 L 96 46 L 90 51 L 92 59 L 85 54 L 78 59 L 80 51 L 74 46 L 82 46 Z" fill="white"/>
+
+  <!-- Stand -->
+  <rect x="60" y="85" width="8" height="20" rx="2" fill="white" opacity="0.9"/>
+  <rect x="45" y="105" width="38" height="6" rx="3" fill="white" opacity="0.9"/>
+</svg>

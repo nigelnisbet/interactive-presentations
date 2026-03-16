@@ -69,7 +69,32 @@ export const ReviewGamePodium: React.FC<ReviewGamePodiumProps> = ({
       <h2 style={styles.title}>{isFinal ? 'Final Results!' : 'Leaderboard'}</h2>
 
       <div style={styles.podiumContainer}>
-        {/* Second place (left) */}
+        {/* Third place (left - shortest) */}
+        {third && (
+          <div style={styles.podiumSpot}>
+            <div style={styles.playerCard}>
+              <div style={{ ...styles.avatar, backgroundColor: '#cd7f32' }}>
+                {third.name.charAt(0).toUpperCase()}
+              </div>
+              <div style={styles.playerName}>{third.name}</div>
+              <div style={styles.playerPoints}>{third.totalPoints.toLocaleString()} pts</div>
+              {getRankChange(third) && (
+                <div style={{
+                  ...styles.rankChange,
+                  color: getRankChange(third)?.direction === 'up' ? '#10b981' : '#ef4444',
+                }}>
+                  {getRankChange(third)?.direction === 'up' ? '↑' : '↓'}
+                  {getRankChange(third)?.amount}
+                </div>
+              )}
+            </div>
+            <div style={{ ...styles.podium, ...styles.podiumThird }}>
+              <span style={styles.podiumRank}>3</span>
+            </div>
+          </div>
+        )}
+
+        {/* Second place (middle - medium) */}
         {second && (
           <div style={styles.podiumSpot}>
             <div style={styles.playerCard}>
@@ -94,7 +119,7 @@ export const ReviewGamePodium: React.FC<ReviewGamePodiumProps> = ({
           </div>
         )}
 
-        {/* First place (center) */}
+        {/* First place (right - tallest) */}
         {first && (
           <div style={styles.podiumSpot}>
             <div style={styles.playerCard}>
@@ -116,31 +141,6 @@ export const ReviewGamePodium: React.FC<ReviewGamePodiumProps> = ({
             </div>
             <div style={{ ...styles.podium, ...styles.podiumFirst }}>
               <span style={styles.podiumRank}>1</span>
-            </div>
-          </div>
-        )}
-
-        {/* Third place (right) */}
-        {third && (
-          <div style={styles.podiumSpot}>
-            <div style={styles.playerCard}>
-              <div style={{ ...styles.avatar, backgroundColor: '#cd7f32' }}>
-                {third.name.charAt(0).toUpperCase()}
-              </div>
-              <div style={styles.playerName}>{third.name}</div>
-              <div style={styles.playerPoints}>{third.totalPoints.toLocaleString()} pts</div>
-              {getRankChange(third) && (
-                <div style={{
-                  ...styles.rankChange,
-                  color: getRankChange(third)?.direction === 'up' ? '#10b981' : '#ef4444',
-                }}>
-                  {getRankChange(third)?.direction === 'up' ? '↑' : '↓'}
-                  {getRankChange(third)?.amount}
-                </div>
-              )}
-            </div>
-            <div style={{ ...styles.podium, ...styles.podiumThird }}>
-              <span style={styles.podiumRank}>3</span>
             </div>
           </div>
         )}
@@ -268,18 +268,17 @@ const styles: Record<string, React.CSSProperties> = {
     paddingBottom: '12px',
     borderRadius: '8px 8px 0 0',
     width: '100px',
-    animation: 'podiumRise 0.8s ease-out forwards',
   },
   podiumFirst: {
-    height: '120px',
+    height: '160px',
     background: 'linear-gradient(180deg, #ffd700 0%, #b8860b 100%)',
   },
   podiumSecond: {
-    height: '90px',
+    height: '110px',
     background: 'linear-gradient(180deg, #c0c0c0 0%, #808080 100%)',
   },
   podiumThird: {
-    height: '60px',
+    height: '70px',
     background: 'linear-gradient(180deg, #cd7f32 0%, #8b4513 100%)',
   },
   podiumRank: {

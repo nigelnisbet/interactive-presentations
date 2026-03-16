@@ -120,28 +120,36 @@ export const PollResults: React.FC<PollResultsProps> = ({ activity, results }) =
 
     return (
       <div style={styles.barChartContainer}>
-        <div style={styles.barChartBars}>
+        <div style={{
+          ...styles.barChartBars,
+          // Adjust gap based on number of options
+          gap: optionStats.length <= 4 ? '32px' : '20px',
+        }}>
           {optionStats.map((stat, index) => {
             const heightPercent = maxPercentage > 0 ? (stat.percentage / maxPercentage) * 100 : 0;
             return (
               <div key={index} style={styles.barChartColumn}>
-                <div style={styles.barChartValue}>
-                  {stat.percentage.toFixed(0)}%
+                {/* Fixed height section for value + bar */}
+                <div style={styles.barChartTop}>
+                  <div style={styles.barChartValue}>
+                    {stat.percentage.toFixed(0)}%
+                  </div>
+                  <div style={styles.barChartBarWrapper}>
+                    <div
+                      style={{
+                        ...styles.barChartBar,
+                        height: `${heightPercent}%`,
+                        backgroundColor: stat.color,
+                      }}
+                    />
+                  </div>
                 </div>
-                <div style={styles.barChartBarWrapper}>
-                  <div
-                    style={{
-                      ...styles.barChartBar,
-                      height: `${heightPercent}%`,
-                      backgroundColor: stat.color,
-                    }}
-                  />
-                </div>
+                {/* Labels below - can vary in height */}
                 <div style={styles.barChartLabel} title={stat.option}>
-                  {stat.option.length > 12 ? stat.option.substring(0, 10) + '...' : stat.option}
+                  {stat.option}
                 </div>
                 <div style={styles.barChartCount}>
-                  {stat.count}
+                  {stat.count} votes
                 </div>
               </div>
             );
@@ -262,51 +270,61 @@ const styles: Record<string, React.CSSProperties> = {
   },
   barChartBars: {
     display: 'flex',
-    alignItems: 'flex-end',
+    alignItems: 'flex-start',
     justifyContent: 'center',
-    gap: '16px',
-    height: '250px',
-    paddingBottom: '60px',
+    gap: '24px',
+    minHeight: '320px',
   },
   barChartColumn: {
     display: 'flex',
     flexDirection: 'column',
     alignItems: 'center',
     flex: 1,
-    maxWidth: '80px',
+    maxWidth: '120px',
+    minWidth: '80px',
+  },
+  barChartTop: {
+    display: 'flex',
+    flexDirection: 'column',
+    alignItems: 'center',
+    height: '200px',
   },
   barChartValue: {
-    fontSize: '14px',
-    fontWeight: '600',
+    fontSize: '16px',
+    fontWeight: '700',
     color: '#374151',
     marginBottom: '8px',
+    height: '24px',
   },
   barChartBarWrapper: {
     width: '100%',
-    height: '180px',
+    flex: 1,
     display: 'flex',
     alignItems: 'flex-end',
+    justifyContent: 'center',
   },
   barChartBar: {
-    width: '100%',
-    borderRadius: '4px 4px 0 0',
+    width: '60px',
+    borderRadius: '6px 6px 0 0',
     transition: 'height 0.5s ease-out',
     minHeight: '4px',
   },
   barChartLabel: {
-    fontSize: '12px',
-    color: '#6b7280',
-    marginTop: '8px',
+    fontSize: '13px',
+    fontWeight: '500',
+    color: '#374151',
+    marginTop: '12px',
     textAlign: 'center',
-    maxWidth: '80px',
-    overflow: 'hidden',
-    textOverflow: 'ellipsis',
-    whiteSpace: 'nowrap',
+    maxWidth: '120px',
+    lineHeight: '1.3',
+    wordWrap: 'break-word',
+    overflowWrap: 'break-word',
+    hyphens: 'auto',
   },
   barChartCount: {
-    fontSize: '11px',
-    color: '#9ca3af',
-    marginTop: '2px',
+    fontSize: '12px',
+    color: '#6b7280',
+    marginTop: '4px',
   },
   // Pie Chart styles
   pieContainer: {
