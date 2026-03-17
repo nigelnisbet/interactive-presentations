@@ -20,8 +20,11 @@ export const Poll: React.FC<PollProps> = ({ activity, results }) => {
   const [submitted, setSubmitted] = useState(false);
   const { submitResponse } = useSocket();
 
+  // Check if this is display-only mode (visual prompt, no interaction)
+  const isDisplayOnly = (activity as any).displayMode === 'display-only';
+
   const handleOptionClick = (index: number) => {
-    if (submitted) return;
+    if (submitted || isDisplayOnly) return;
 
     if (activity.allowMultiple) {
       setSelectedOptions((prev) =>
@@ -67,11 +70,17 @@ export const Poll: React.FC<PollProps> = ({ activity, results }) => {
 
         <h2 className="text-3xl font-bold text-gray-800 mb-6">{activity.question}</h2>
 
-        {!submitted && (
+        {!submitted && !isDisplayOnly && (
           <p className="text-gray-600 mb-6">
             {activity.allowMultiple
               ? 'Select all that apply'
               : 'Select one option'}
+          </p>
+        )}
+
+        {isDisplayOnly && (
+          <p className="text-gray-600 mb-6 italic">
+            Discussion prompt - share your thoughts verbally
           </p>
         )}
 
@@ -86,9 +95,9 @@ export const Poll: React.FC<PollProps> = ({ activity, results }) => {
               <button
                 key={index}
                 onClick={() => handleOptionClick(index)}
-                disabled={submitted}
+                disabled={submitted || isDisplayOnly}
                 className={`w-full text-left p-4 rounded-lg border-2 transition-all relative overflow-hidden ${
-                  submitted ? 'cursor-default' : 'cursor-pointer'
+                  (submitted || isDisplayOnly) ? 'cursor-default' : 'cursor-pointer'
                 }`}
                 style={{
                   borderColor: isSelected ? stMathBlue : '#e5e7eb',
@@ -137,7 +146,7 @@ export const Poll: React.FC<PollProps> = ({ activity, results }) => {
           })}
         </div>
 
-        {!submitted ? (
+        {!isDisplayOnly && !submitted && (
           <button
             onClick={handleSubmit}
             disabled={selectedOptions.length === 0}
@@ -149,7 +158,9 @@ export const Poll: React.FC<PollProps> = ({ activity, results }) => {
           >
             Submit Answer
           </button>
-        ) : (
+        )}
+
+        {!isDisplayOnly && submitted && (
           <div className="text-center">
             <div className="inline-flex items-center space-x-2 bg-green-50 text-green-700 px-6 py-3 rounded-lg">
               <svg

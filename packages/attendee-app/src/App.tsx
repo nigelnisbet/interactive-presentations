@@ -1,9 +1,11 @@
 import React, { useEffect } from 'react';
 import { BrowserRouter, Routes, Route, Navigate, useNavigate, useLocation } from 'react-router-dom';
 import { JoinSession } from './pages/JoinSession';
+import { PersonalSessionJoin } from './pages/PersonalSessionJoin';
 import { WaitingScreen } from './pages/WaitingScreen';
 import { PresenterDashboard } from './pages/PresenterDashboard';
 import { ActivityBuilder } from './pages/ActivityBuilder';
+import { AdminDashboard } from './pages/AdminDashboard';
 import { Poll } from './components/activities/Poll';
 import { Quiz } from './components/activities/Quiz';
 import { WebLink } from './components/activities/WebLink';
@@ -33,9 +35,11 @@ const ActivityRouter: React.FC = () => {
       <Route path="/" element={<Navigate to="/join" replace />} />
       <Route path="/join" element={<JoinSession />} />
       <Route path="/join/:code" element={<JoinSession />} />
+      <Route path="/conv-tool/:name" element={<PersonalSessionJoin />} />
       <Route path="/waiting" element={<WaitingContent />} />
       <Route path="/presenter/:code" element={<PresenterDashboard />} />
       <Route path="/builder" element={<ActivityBuilder />} />
+      <Route path="/admin" element={<AdminDashboard />} />
       <Route path="*" element={<Navigate to="/join" replace />} />
     </Routes>
   );

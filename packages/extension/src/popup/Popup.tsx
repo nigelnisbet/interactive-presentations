@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { extractPresentationId } from '../utils/url-parser';
 import { createRoot } from 'react-dom/client';
 
 interface SessionInfo {
@@ -77,20 +78,7 @@ const Popup: React.FC = () => {
       const currentUrl = tabs[0]?.url || '';
 
       // Extract presentation ID from URL
-      // Format: https://mind.slides.com/d/JpLoPiI/live or https://slides.com/user/presentation-name
-      const urlParts = currentUrl.split('/');
-      let presentationId = 'default-presentation';
-
-      // Check for /d/ format (mind.slides.com/d/ID/...)
-      const dIndex = urlParts.indexOf('d');
-      if (dIndex !== -1 && dIndex < urlParts.length - 1) {
-        presentationId = urlParts[dIndex + 1];
-      } else {
-        // Fall back to last non-empty part (excluding fragments)
-        const cleanUrl = currentUrl.split('#')[0].split('?')[0];
-        const parts = cleanUrl.split('/').filter(p => p);
-        presentationId = parts[parts.length - 1] || 'default-presentation';
-      }
+      const presentationId = extractPresentationId(currentUrl);
 
       chrome.runtime.sendMessage(
         {

@@ -15,6 +15,8 @@ import {
   off,
   Unsubscribe,
 } from 'firebase/database';
+import { shouldUsePersonalSession, getPersonalSessionCode, getTeamMemberName } from '../personal-session-config';
+import { extractPresentationId } from '../utils/url-parser';
 
 console.log('[Interactive Presentations] Background service worker started');
 
@@ -150,8 +152,18 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 
   if (message.type === 'INJECT_REVEAL_LISTENER') {
     // Inject script into main world to access Reveal.js
-    if (sender.tab?.id) {
-      injectRevealListener(sender.tab.id).then(() => {
+    if (sender.tab?.id && sender.tab?.url) {
+      injectRevealListener(sender.tab.id).then(async () => {
+        // Auto-start session for personal session mode
+        const presentationId = extractPresentationId(sender.tab!.url!);
+        console.log('[Interactive Presentations] Detected presentation:', presentationId);
+
+        // Check if this should use personal session mode and auto-start
+        const shouldUsePersonal = await shouldUsePersonalSession(presentationId);
+        if (shouldUsePersonal && !currentSessionCode) {
+          console.log('[Interactive Presentations] Auto-starting personal session for:', presentationId);
+          await createSession(presentationId);
+        }
         sendResponse({ status: 'ok' });
       }).catch((error) => {
         console.error('[Interactive Presentations] Injection failed:', error);
@@ -162,6 +174,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   }
 
   if (message.type === 'REVEAL_READY' || message.type === 'REVEAL_SLIDE_CHANGED') {
+    console.log('[Interactive Presentations] Background received slide change:', message.type, message.data);
     handleSlideChange(message.data);
     sendResponse({ status: 'ok' });
   }
@@ -289,20 +302,79 @@ async function createSession(presentationId: string) {
   try {
     console.log('[Interactive Presentations] Creating session for:', presentationId);
 
-    // Generate unique session code
-    let code = generateSessionCode();
-    let attempts = 0;
+    // Check if we should use personal session mode
+    let code: string;
+    let isPersonalSession = false;
 
-    // Make sure code is unique
-    while (attempts < 10) {
-      const existingSession = await get(ref(database, `sessions/${code}`));
-      if (!existingSession.exists()) break;
-      code = generateSessionCode();
-      attempts++;
+    const shouldUsePersonal = await shouldUsePersonalSession(presentationId);
+    if (shouldUsePersonal) {
+      // Use pre-configured personal session code
+      const personalCode = await getPersonalSessionCode();
+      if (personalCode) {
+        code = personalCode;
+        isPersonalSession = true;
+        console.log('[Interactive Presentations] Using personal session mode:', code);
+
+        // Check if session already exists and is active
+        const existingSession = await get(ref(database, `sessions/${code}`));
+        if (existingSession.exists()) {
+          const session = existingSession.val();
+          if (session.status === 'active') {
+            console.log('[Interactive Presentations] Personal session already active, updating...');
+            // Update existing session instead of creating new one
+            await update(ref(database, `sessions/${code}`), {
+              presenterId: chrome.runtime.id,
+              currentSlide: { indexh: 0, indexv: 0, timestamp: Date.now() },
+            });
+
+            currentSessionCode = code;
+            currentSessionId = session.id;
+            currentPresentationId = presentationId;
+
+            // Load activities
+            const activitiesSnapshot = await get(ref(database, `presentations/${presentationId}/activities`));
+            activities = activitiesSnapshot.exists() ? activitiesSnapshot.val() : [];
+            console.log('[Interactive Presentations] Loaded activities for personal session:', activities.length, activities);
+
+            // Generate QR code
+            const attendeeAppUrl = 'https://presentations.stmath.com';
+            const joinUrl = `${attendeeAppUrl}/conv-tool/${personalCode.toLowerCase()}`;
+            currentQRCode = `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(joinUrl)}`;
+
+            setupParticipantListener(code);
+            await saveSessionState();
+            startKeepAlive();
+
+            return {
+              success: true,
+              sessionId: session.id,
+              sessionCode: code,
+              qrCode: currentQRCode,
+              isPersonalSession: true,
+            };
+          }
+        }
+      } else {
+        console.warn('[Interactive Presentations] Personal session enabled but no code configured');
+      }
     }
 
-    if (attempts >= 10) {
-      return { success: false, error: 'Failed to generate unique session code' };
+    // Regular mode: generate unique session code
+    if (!isPersonalSession) {
+      code = generateSessionCode();
+      let attempts = 0;
+
+      // Make sure code is unique
+      while (attempts < 10) {
+        const existingSession = await get(ref(database, `sessions/${code}`));
+        if (!existingSession.exists()) break;
+        code = generateSessionCode();
+        attempts++;
+      }
+
+      if (attempts >= 10) {
+        return { success: false, error: 'Failed to generate unique session code' };
+      }
     }
 
     const sessionId = `session_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
@@ -344,7 +416,17 @@ async function createSession(presentationId: string) {
 
     // Generate QR code URL (using a public QR code API)
     const attendeeAppUrl = 'https://presentations.stmath.com'; // Production URL
-    const joinUrl = `${attendeeAppUrl}/join/${code}`;
+    let joinUrl: string;
+
+    if (isPersonalSession) {
+      // For personal sessions, use the friendly conv-tool URL
+      const teamMemberName = await getTeamMemberName() || 'team-member';
+      joinUrl = `${attendeeAppUrl}/conv-tool/${teamMemberName}`;
+    } else {
+      // For regular sessions, use the standard join URL
+      joinUrl = `${attendeeAppUrl}/join/${code}`;
+    }
+
     currentQRCode = `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(joinUrl)}`;
 
     // Setup participant count listener

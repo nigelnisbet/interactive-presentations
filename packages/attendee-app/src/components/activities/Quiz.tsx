@@ -24,6 +24,9 @@ export const Quiz: React.FC<QuizProps> = ({ activity }) => {
   const { submitResponse } = useSocket();
   const lastActivityIdRef = useRef<string | undefined>(activity.activityId);
 
+  // Check if this is display-only mode (visual prompt, no interaction)
+  const isDisplayOnly = (activity as any).displayMode === 'display-only';
+
   // Reset state ONLY when activityId actually changes (new question)
   useEffect(() => {
     if (lastActivityIdRef.current !== activity.activityId) {
@@ -200,7 +203,13 @@ export const Quiz: React.FC<QuizProps> = ({ activity }) => {
           })}
         </div>
 
-        {!submitted ? (
+        {isDisplayOnly && (
+          <p className="text-center text-gray-600 italic">
+            Discussion prompt - share your thoughts verbally
+          </p>
+        )}
+
+        {!isDisplayOnly && !submitted && (
           <button
             onClick={handleSubmit}
             disabled={selectedOption === null}
@@ -212,7 +221,9 @@ export const Quiz: React.FC<QuizProps> = ({ activity }) => {
           >
             Lock In Answer
           </button>
-        ) : (
+        )}
+
+        {!isDisplayOnly && submitted && (
           <div className="text-center">
             {result?.isCorrect ? (
               <div className="inline-flex items-center space-x-2 bg-green-50 text-green-700 px-6 py-3 rounded-lg">
